@@ -27,6 +27,8 @@ object GenBus {
         /** denoising step derived from progress (UI renders "7/20" with its own strings) */
         val stageKey: String = "",
         val stageStep: Int = 0,
+        /** total ms the process appeared frozen/throttled during this job */
+        val pausedMs: Long = 0,
     )
 
     private val _state = MutableStateFlow(State())

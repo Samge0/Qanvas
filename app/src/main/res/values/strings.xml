@@ -193,6 +193,24 @@
     <string name="save_pick_title">Save image</string>
     <string name="busy_block_hint">A generation is running — wait or cancel it first</string>
 
+    <!-- v1.1.4 additions: background reliability -->
+    <string name="set_bg_title">Background running</string>
+    <string name="set_bg_desc">A 7-minute generation must survive app switching. Qanvas keeps a silent progress overlay on screen (keeps GPU scheduling) and a muted audio focus (prevents system freezing) while generating. Both stop automatically when the job ends.</string>
+    <string name="set_bg_overlay">Show progress overlay while generating</string>
+    <string name="set_bg_silent">Keep alive with silent audio</string>
+    <string name="set_bg_battery">Battery optimization: not restricted</string>
+    <string name="set_bg_battery_action">Request exemption</string>
+    <string name="set_bg_overlay_perm">Overlay permission: not granted</string>
+    <string name="set_bg_overlay_ok">Overlay permission granted</string>
+    <string name="set_bg_grant">Grant</string>
+    <string name="set_bg_restricted">Battery optimization: restricted (background jobs may stall)</string>
+    <string name="set_bg_oem_note">If generation still stalls in the background on your ROM, also lock Qanvas in the recent-apps view and allow it in the system\'s battery saver whitelist (Settings → Battery → App launch).</string>
+    <string name="toast_overlay_perm_needed">Overlay permission needed for background progress — generation still runs without it</string>
+    <string name="d_paused">Background stalls</string>
+    <string name="toast_paused_fmt">Done — stalled %1$d s in background (check Settings → Background running)</string>
+    <string name="toast_done_plain">Done</string>
+    <string name="overlay_text_fmt">Qanvas · %1$d%%</string>
+
     <!-- notifications (service) -->
     <string name="notif_title">Qanvas</string>
     <string name="notif_downloading">Downloading model</string>

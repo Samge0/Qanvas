@@ -46,6 +46,8 @@ data class GenRecord(
     val ratio: Int = 0,
     /** tier ordinal used */
     val tier: Int = 1,
+    /** ms the process was stalled in background (v3) */
+    val pausedMs: Long = 0,
 )
 
 @Dao
@@ -66,7 +68,7 @@ interface GenDao {
     suspend fun count(): Int
 }
 
-@Database(entities = [GenRecord::class], version = 2, exportSchema = false)
+@Database(entities = [GenRecord::class], version = 3, exportSchema = false)
 abstract class HistoryDb : RoomDatabase() {
     abstract fun dao(): GenDao
 
@@ -74,15 +76,20 @@ abstract class HistoryDb : RoomDatabase() {
         private val MIGRATE_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 listOf("startAt", "modelLoadMs", "genMs", "endAt", "ratio", "tier").forEach { col ->
-                    val type = if (col == "startAt" || col == "endAt") "INTEGER" else "INTEGER"
-                    db.execSQL("ALTER TABLE generations ADD COLUMN $col $type NOT NULL DEFAULT 0")
+                    db.execSQL("ALTER TABLE generations ADD COLUMN $col INTEGER NOT NULL DEFAULT 0")
                 }
+            }
+        }
+
+        private val MIGRATE_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE generations ADD COLUMN pausedMs INTEGER NOT NULL DEFAULT 0")
             }
         }
 
         fun build(context: Context): HistoryDb =
             Room.databaseBuilder(context, HistoryDb::class.java, "qanvas.db")
-                .addMigrations(MIGRATE_1_2)
+                .addMigrations(MIGRATE_1_2, MIGRATE_2_3)
                 .build()
     }
 }

@@ -172,6 +172,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }
                     _result.value = bmp
                     refreshGate()
+                    _toast.value = if (st.pausedMs > 1000) "__paused__:${st.pausedMs / 1000}" else "__done__"
                 }
             }
         }

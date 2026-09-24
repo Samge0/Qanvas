@@ -193,6 +193,24 @@
     <string name="save_pick_title">保存图片</string>
     <string name="busy_block_hint">有生成任务进行中——请等待完成或先取消</string>
 
+    <!-- v1.1.4 additions: background reliability -->
+    <string name="set_bg_title">后台运行保障</string>
+    <string name="set_bg_desc">7 分钟的生成任务必须能在切换 App 后存活。Qanvas 在生成期间会保持一个静默进度悬浮条（维持 GPU 调度）并持有静音音频焦点（防止系统冻结进程），任务结束自动全部停止。</string>
+    <string name="set_bg_overlay">生成时显示进度悬浮条</string>
+    <string name="set_bg_silent">静音保活（防冻结）</string>
+    <string name="set_bg_battery">电池优化：未受限</string>
+    <string name="set_bg_battery_action">申请豁免</string>
+    <string name="set_bg_overlay_perm">悬浮窗权限：未授予</string>
+    <string name="set_bg_overlay_ok">悬浮窗权限：已授予</string>
+    <string name="set_bg_grant">去授权</string>
+    <string name="set_bg_restricted">电池优化：受限（后台任务可能停滞）</string>
+    <string name="set_bg_oem_note">如果你的系统后台仍然停滞，请在最近任务视图锁定 Qanvas，并在系统省电白名单中允许它（设置 → 电池 → 应用启动管理）。</string>
+    <string name="toast_overlay_perm_needed">后台进度需要悬浮窗权限——没有它生成仍会继续</string>
+    <string name="d_paused">后台停滞</string>
+    <string name="toast_paused_fmt">完成——后台共停滞 %1$d 秒（可在设置 → 后台运行保障查看）</string>
+    <string name="toast_done_plain">完成</string>
+    <string name="overlay_text_fmt">Qanvas · %1$d%%</string>
+
     <!-- notifications (service) -->
     <string name="notif_title">Qanvas</string>
     <string name="notif_downloading">正在下载模型</string>

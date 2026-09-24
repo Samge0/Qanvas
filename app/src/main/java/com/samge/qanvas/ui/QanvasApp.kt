@@ -142,7 +142,12 @@ fun QanvasRoot(vm: MainViewModel) {
             "__busy__" -> snackbar.showSnackbar(ctx.getString(R.string.busy_block_hint))
             "__cancelled__" -> snackbar.showSnackbar(ctx.getString(R.string.job_cancelled))
             "__saved_ok__" -> snackbar.showSnackbar(ctx.getString(R.string.toast_saved_ok))
+            "__done__" -> snackbar.showSnackbar(ctx.getString(R.string.toast_done_plain))
             "__save_failed__" -> snackbar.showSnackbar(ctx.getString(R.string.toast_save_failed))
+            else -> if (toastMsg != null && toastMsg!!.startsWith("__paused__:")) {
+                val secs = toastMsg!!.removePrefix("__paused__:").toIntOrNull() ?: 0
+                snackbar.showSnackbar(ctx.getString(R.string.toast_paused_fmt, secs))
+            }
         }
         if (toastMsg != null) vm.toastShown()
     }
@@ -927,6 +932,9 @@ fun RecordDetailDialog(vm: MainViewModel, rec: GenRecord, onClose: () -> Unit) {
                 DetailRow(stringResource(R.string.d_model_load), stringResource(R.string.sec_fmt, rec.modelLoadMs / 1000.0))
                 DetailRow(stringResource(R.string.d_gen), stringResource(R.string.sec_fmt, rec.genMs / 1000.0))
                 DetailRow(stringResource(R.string.d_end), if (rec.endAt > 0) fmt.format(Date(rec.endAt)) else "—")
+                if (rec.pausedMs > 1000) {
+                    DetailRow(stringResource(R.string.d_paused), stringResource(R.string.sec_fmt, rec.pausedMs / 1000.0))
+                }
                 DetailRow(stringResource(R.string.d_total), stringResource(R.string.sec_fmt, rec.durationMs / 1000.0), bold = true)
                 Spacer(Modifier.height(12.dp))
                 // FlowRow: wraps instead of squeezing labels on narrow screens

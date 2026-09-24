@@ -129,7 +129,6 @@ class GenService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        setForegroundServicePriority()
         notifMgr = getSystemService(NotificationManager::class.java)
         listOf(CH_GEN to getString(R.string.notif_channel_gen), CH_DL to getString(R.string.notif_channel_dl)).forEach { (id, name) ->
             notifMgr.createNotificationChannel(
@@ -198,6 +197,10 @@ class GenService : Service() {
         if (running) return
         running = true
         job = scope.launch {
+            val wl = androidx.core.content.ContextCompat.getSystemService(
+                this@GenService, android.os.PowerManager::class.java
+            )!!.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "qanvas:dl")
+            wl.acquire(4 * 60 * 60 * 1000L)
             try {
                 val proxy = GenEngine.proxy(this@GenService)
                 if (proxy != null) {
@@ -224,6 +227,7 @@ class GenService : Service() {
                 }
             } finally {
                 running = false
+                runCatching { if (wl.isHeld) wl.release() }
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
@@ -243,20 +247,28 @@ class GenService : Service() {
         }
         running = true
         cancelRequested = false
-        // Partial wakelock with a generous timeout: guarantees the OpenCL denoising
-        // loop keeps running when the user switches to another app. Without this,
-        // OEM power managers throttle background GPU/CPU work within seconds.
+        val prefs = GenEngine.prefs(this)
+        val useSilent = prefs.getBoolean(GenEngine.KEY_BG_SILENT, true)
+        val useOverlay = prefs.getBoolean(GenEngine.KEY_BG_OVERLAY, true)
+        // Partial wakelock: keeps the CPU/GPU pipeline alive with screen off.
         val wl = androidx.core.content.ContextCompat.getSystemService(
             this, android.os.PowerManager::class.java
         )!!.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "qanvas:gen")
         wl.acquire(15 * 60 * 1000L)
+        // Media-process class: OEM freezers never freeze an app that is "playing audio".
+        if (useSilent) BgKeepAlive.startSilent(this)
+        if (useOverlay) BgKeepAlive.showOverlay(this@GenService, getString(R.string.overlay_text_fmt, 0))
         job = scope.launch {
+            // run the whole coroutine on Default but boost its worker thread
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY)
             var doneFile: File? = null
             var error: String? = null
             var oom = false
             var cancelledByUser = false
             var width = 0
             var height = 0
+            var pausedMs = 0L
+            var lastProgressAt = android.os.SystemClock.elapsedRealtime()
             val startAt = System.currentTimeMillis()
             val perf = android.os.SystemClock.elapsedRealtime()
             var modelLoadEnd = perf
@@ -294,6 +306,14 @@ class GenService : Service() {
                         if (cancelRequested) {
                             throw QwenImage21Exception(QwenImage21Exception.RUNTIME_ERROR, "cancelled by user")
                         }
+                        // stall telemetry: native steps land every few seconds; any gap
+                        // beyond 40 s means the process was frozen/throttled meanwhile.
+                        val now = android.os.SystemClock.elapsedRealtime()
+                        if (now - lastProgressAt > 40_000L) {
+                            pausedMs += now - lastProgressAt
+                        }
+                        lastProgressAt = now
+                        if (useOverlay) BgKeepAlive.updateOverlay(this@GenService, getString(R.string.overlay_text_fmt, p))
                         if (firstDenoiseAt[0] == 0L && p > 10) {
                             firstDenoiseAt[0] = android.os.SystemClock.elapsedRealtime()
                         }
@@ -342,7 +362,8 @@ class GenService : Service() {
                 val genMs = endMs - genStart
                 val dur = endMs - perf
                 if (doneFile != null) {
-                    GenBus.post(GenBus.State(GenBus.Kind.DONE, 100, "done", doneFile = doneFile!!.absolutePath))
+                    GenBus.post(GenBus.State(GenBus.Kind.DONE, 100, "done",
+                        doneFile = doneFile!!.absolutePath, pausedMs = pausedMs))
                 } else if (cancelledByUser) {
                     GenBus.post(GenBus.State(GenBus.Kind.ERROR, error = "__cancelled__"))
                 } else {
@@ -358,7 +379,7 @@ class GenService : Service() {
                                 prompt = prompt, mode = mode, width = width, height = height,
                                 steps = steps, seed = seed, outPath = out.absolutePath,
                                 inPath = inputPath, durationMs = dur,
-                                startAt = startAt, modelLoadMs = loadMs, genMs = genMs,
+                                startAt = startAt, modelLoadMs = loadMs, genMs = genMs, pausedMs = pausedMs,
                                 endAt = endAt, ratio = 0, tier = 0,
                             )
                         )
@@ -366,18 +387,12 @@ class GenService : Service() {
                 } catch (_: Exception) {
                 }
                 running = false
+                BgKeepAlive.stopSilent()
+                BgKeepAlive.removeOverlay(this@GenService)
                 runCatching { if (wl.isHeld) wl.release() }
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
-        }
-    }
-
-    /** Boost this thread to top-of-UI priority so the scheduler favors denoising. */
-    private fun setForegroundServicePriority() {
-        try {
-            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY)
-        } catch (_: Exception) {
         }
     }
 

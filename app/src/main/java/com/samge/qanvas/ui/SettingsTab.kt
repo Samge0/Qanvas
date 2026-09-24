@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -62,6 +63,7 @@ import com.samge.qanvas.R
 import com.samge.qanvas.core.GenBus
 import com.samge.qanvas.core.GenEngine
 import com.samge.qanvas.core.GenService
+import com.samge.qanvas.core.BgKeepAlive
 import com.samge.qanvas.core.ModelMigrator
 import com.samge.qanvas.ui.theme.AppleTokens
 import kotlinx.coroutines.launch
@@ -355,6 +357,74 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
             }
         }
 
+        // ---------------- background running ----------------
+        SettingsCard(title = stringResource(R.string.set_bg_title)) {
+            Text(
+                stringResource(R.string.set_bg_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            var overlayOk by remember { mutableStateOf(BgKeepAlive.canDrawOverlays(ctx)) }
+            var batteryOk by remember { mutableStateOf(BgKeepAlive.isIgnoringBatteryOptimizations(ctx)) }
+            // refresh on every recomposition of this card
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                while (true) {
+                    overlayOk = BgKeepAlive.canDrawOverlays(ctx)
+                    batteryOk = BgKeepAlive.isIgnoringBatteryOptimizations(ctx)
+                    kotlinx.coroutines.delay(2000)
+                }
+            }
+            if (batteryOk) {
+                StatusRow(ok = true, text = stringResource(R.string.set_bg_battery))
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Warning, null, Modifier.size(16.dp), tint = AppleTokens.Orange)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.set_bg_restricted),
+                        style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { BgKeepAlive.requestBatteryExemption(ctx) }) {
+                        Text(stringResource(R.string.set_bg_battery_action))
+                    }
+                }
+            }
+            if (overlayOk) {
+                StatusRow(ok = true, text = stringResource(R.string.set_bg_overlay_ok))
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Warning, null, Modifier.size(16.dp), tint = AppleTokens.Orange)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.set_bg_overlay_perm),
+                        style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { BgKeepAlive.requestOverlayPermission(ctx) }) {
+                        Text(stringResource(R.string.set_bg_grant))
+                    }
+                }
+            }
+            var keepOverlay by remember { mutableStateOf(prefs.getBoolean(GenEngine.KEY_BG_OVERLAY, true)) }
+            var keepSilent by remember { mutableStateOf(prefs.getBoolean(GenEngine.KEY_BG_SILENT, true)) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.set_bg_overlay), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                Switch(checked = keepOverlay, onCheckedChange = {
+                    keepOverlay = it
+                    prefs.edit().putBoolean(GenEngine.KEY_BG_OVERLAY, it).apply()
+                    vm.toast("__saved__")
+                })
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.set_bg_silent), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                Switch(checked = keepSilent, onCheckedChange = {
+                    keepSilent = it
+                    prefs.edit().putBoolean(GenEngine.KEY_BG_SILENT, it).apply()
+                    vm.toast("__saved__")
+                })
+            }
+            Text(
+                stringResource(R.string.set_bg_oem_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
         // ---------------- danger ----------------
         SettingsCard(title = stringResource(R.string.set_danger_title)) {
             OutlinedButton(
@@ -371,7 +441,7 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
         // ---------------- about ----------------
         SettingsCard(title = stringResource(R.string.set_about_title)) {
             Text(
-                stringResource(R.string.set_about_body, "1.1.3"),
+                stringResource(R.string.set_about_body, "1.1.4"),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
