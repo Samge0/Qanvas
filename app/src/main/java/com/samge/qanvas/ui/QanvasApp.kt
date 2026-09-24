@@ -83,6 +83,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
@@ -262,13 +263,16 @@ fun QanvasRoot(vm: MainViewModel) {
                             listOf(Color.Transparent, MaterialTheme.colorScheme.surfaceVariant)))
                 )
             }
+            // per-tab state preservation: keeps prompt text, scroll positions and
+            // other rememberSaveable state alive while the tab is off-screen
+            val stateHolder = rememberSaveableStateHolder()
             when (tab) {
-                0 -> if (gate.modelPresent) CreateTab(vm) else MissingModelGate(vm)
-                1 -> if (gate.modelPresent) StickerTab(vm) else MissingModelGate(vm)
-                2 -> if (gate.modelPresent) EditTab(vm) else MissingModelGate(vm)
-                3 -> GalleryTab(vm, onOpen = { showDetail = it })
-                4 -> InspoTab(vm)
-                5 -> SettingsTab(vm, gen)
+                0 -> stateHolder.SaveableStateProvider("q_tab_create") { if (gate.modelPresent) CreateTab(vm) else MissingModelGate(vm) }
+                1 -> stateHolder.SaveableStateProvider("q_tab_sticker") { if (gate.modelPresent) StickerTab(vm) else MissingModelGate(vm) }
+                2 -> stateHolder.SaveableStateProvider("q_tab_edit") { if (gate.modelPresent) EditTab(vm) else MissingModelGate(vm) }
+                3 -> stateHolder.SaveableStateProvider("q_tab_gallery") { GalleryTab(vm, onOpen = { showDetail = it }) }
+                4 -> stateHolder.SaveableStateProvider("q_tab_inspo") { InspoTab(vm) }
+                5 -> stateHolder.SaveableStateProvider("q_tab_settings") { SettingsTab(vm, gen) }
             }
         }
     }
