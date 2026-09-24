@@ -114,8 +114,10 @@ fun QanvasRoot(vm: MainViewModel) {
         when (toastMsg) {
             "__need_download__" -> snackbar.showSnackbar(ctx.getString(R.string.toast_need_download))
             "__dir_invalid__" -> snackbar.showSnackbar(ctx.getString(R.string.toast_dir_invalid))
-            "__dir_applied__" -> snackbar.showSnackbar(ctx.getString(R.string.toast_dir_applied))
+            "__dir_applied__", "__saved__" -> snackbar.showSnackbar(ctx.getString(R.string.toast_saved))
             "__migrate_done__" -> snackbar.showSnackbar(ctx.getString(R.string.toast_migrate_done))
+            "__reset_dir__" -> snackbar.showSnackbar(ctx.getString(R.string.toast_reset_dir))
+            "__lang__" -> snackbar.showSnackbar(ctx.getString(R.string.toast_lang_set))
         }
         if (toastMsg != null) vm.toastShown()
     }
@@ -125,12 +127,25 @@ fun QanvasRoot(vm: MainViewModel) {
         snackbarHost = { SnackbarHost(snackbar) },
     ) { pad ->
         Column(Modifier.padding(pad).fillMaxSize()) {
-            SecondaryTabRow(selectedTabIndex = tab) {
+            // scrollable single-line tab bar: never wraps to two lines on narrow screens
+            @OptIn(ExperimentalMaterial3Api::class)
+            androidx.compose.material3.SecondaryScrollableTabRow(
+                selectedTabIndex = tab,
+                edgePadding = 8.dp,
+            ) {
                 TAB_KEYS.forEachIndexed { i, res ->
                     Tab(
                         selected = tab == i,
                         onClick = { tab = i },
-                        text = { Text(stringResource(res), style = MaterialTheme.typography.labelMedium) },
+                        text = {
+                            Text(
+                                stringResource(res),
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            )
+                        },
                     )
                 }
             }
@@ -853,6 +868,7 @@ fun GalleryTab(vm: MainViewModel) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun InspoTab() {
+    val zh = remember { Inspo.isZh() }
     val groupTitles = listOf(
         stringResource(R.string.inspo_t2i),
         stringResource(R.string.inspo_sticker),
@@ -884,19 +900,19 @@ fun InspoTab() {
                             Icon(Icons.Filled.AutoAwesome, null, Modifier.size(14.dp), tint = AppleTokens.Violet)
                             Spacer(Modifier.width(6.dp))
                             Text(
-                                card.title,
+                                card.titleFor(zh),
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
-                        if (card.hint.isNotEmpty()) {
-                            Text(card.hint, style = MaterialTheme.typography.bodySmall, color = AppleTokens.Violet)
+                        if (card.hintFor(zh).isNotEmpty()) {
+                            Text(card.hintFor(zh), style = MaterialTheme.typography.bodySmall, color = AppleTokens.Violet)
                         }
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            card.prompt, maxLines = 4, overflow = TextOverflow.Ellipsis,
+                            card.promptFor(zh), maxLines = 4, overflow = TextOverflow.Ellipsis,
                             style = MaterialTheme.typography.bodySmall,
                             fontFamily = FontFamily.Monospace,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,

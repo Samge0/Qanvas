@@ -122,7 +122,8 @@ class GenService : Service() {
                 stopSelf()
             }
             ACTION_DOWNLOAD -> {
-                startForeground(NOTIF_DL, notif(CH_DL, "Preparing download", "", 0, true))
+                startForeground(NOTIF_DL, notif(CH_DL, getString(R.string.notif_downloading), "", 0, true))
+                GenBus.post(GenBus.State(GenBus.Kind.DOWNLOADING, 0, detail = "…"))
                 runDownload()
             }
             ACTION_GENERATE -> {
@@ -165,6 +166,9 @@ class GenService : Service() {
                 }
                 val d = ModelDownloader()
                 downloader = d
+                // metadata (HEAD requests for 20 files) can take seconds — show a
+                // "preparing" state immediately so the UI isn't dead.
+                GenBus.post(GenBus.State(GenBus.Kind.DOWNLOADING, 0, detail = "__preparing__"))
                 d.download(GenEngine.modelDir(this@GenService)) { file, done, total ->
                     val pct = (100L * done / total.coerceAtLeast(1L)).toInt()
                     val detail = String.format("%.2f/%.2f GB", done / 1e9, total / 1e9)
@@ -286,7 +290,7 @@ class GenService : Service() {
         )
         return NotificationCompat.Builder(this, channel)
             .setSmallIcon(android.R.drawable.ic_menu_gallery)
-            .setContentTitle("Qanvas")
+            .setContentTitle(getString(R.string.notif_title))
             .setContentText(text)
             .setSubText(sub)
             .setOngoing(true)

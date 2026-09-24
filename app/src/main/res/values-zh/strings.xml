@@ -125,6 +125,26 @@
     <string name="set_about_title">关于</string>
     <string name="set_about_body">Qanvas %1$s · 运行时 AAR v0.2.2 · 模型：evankuo/Qwen-Image-2.1-MNN（Qwen 研究许可）</string>
 
+    <!-- about repo link -->
+    <string name="set_about_repo">github.com/Samge0/Qanvas</string>
+
+    <!-- v1.1.1 additions -->
+    <string name="toast_saved">设置已保存</string>
+    <string name="toast_lang_set">语言已切换</string>
+    <string name="toast_reset_dir">已恢复默认目录</string>
+    <string name="dl_preparing">正在准备下载…（获取文件信息）</string>
+    <string name="set_dir_pick">选择文件夹…</string>
+    <string name="dir_pick_title">选择模型目录</string>
+    <string name="dir_pick_use">使用此文件夹</string>
+    <string name="dir_pick_up">上一级</string>
+    <string name="dir_chip_default">默认存储</string>
+    <string name="migrate_confirm_title">迁移已有的模型文件？</string>
+    <string name="migrate_confirm_body_fmt">旧目录发现 %1$s 模型文件。请选择迁移方式：</string>
+    <string name="migrate_move">移动（更快）</string>
+    <string name="migrate_copy">复制后清理旧目录</string>
+    <string name="reset_dir_confirm">恢复为默认应用目录？自定义目录中的文件将保留在原处。</string>
+    <string name="dir_pick_storage_fmt">存储 %1$d</string>
+
     <!-- notifications (service) -->
     <string name="notif_title">Qanvas</string>
     <string name="notif_downloading">正在下载模型</string>

@@ -1,6 +1,9 @@
 package com.samge.qanvas.ui
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,15 +15,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DriveFileMove
-import kotlinx.coroutines.launch
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -33,11 +39,11 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +56,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.samge.qanvas.R
 import com.samge.qanvas.core.GenBus
@@ -57,29 +64,87 @@ import com.samge.qanvas.core.GenEngine
 import com.samge.qanvas.core.GenService
 import com.samge.qanvas.core.ModelMigrator
 import com.samge.qanvas.ui.theme.AppleTokens
+import kotlinx.coroutines.launch
+import java.io.File
 import java.util.Locale
 
 @Composable
 fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
     val ctx = LocalContext.current
     val gate by vm.gate.collectAsState()
+    val lang by vm.language.collectAsState()
     val prefs = remember { GenEngine.prefs(ctx) }
+    val scope = rememberCoroutineScope()
 
-    var customDir by rememberSaveable { mutableStateOf(prefs.getString(GenEngine.KEY_MODEL_DIR, "") ?: "") }
     var proxyOn by rememberSaveable { mutableStateOf(prefs.getBoolean(GenEngine.KEY_PROXY_ENABLED, false)) }
     var proxyHost by rememberSaveable { mutableStateOf(prefs.getString(GenEngine.KEY_PROXY_HOST, "") ?: "") }
     var proxyPort by rememberSaveable { mutableStateOf(prefs.getInt(GenEngine.KEY_PROXY_PORT, 7890).toString()) }
+
     var migrating by remember { mutableStateOf<Int?>(null) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var confirmResetDir by remember { mutableStateOf(false) }
+    var dirPicker by remember { mutableStateOf(false) }
+    var pendingDir by remember { mutableStateOf<File?>(null) }
+    var migrateChoice by remember { mutableStateOf<File?>(null) }
 
-    val lang by vm.language.collectAsState()
+    val currentCustom: String = remember(gate) { prefs.getString(GenEngine.KEY_MODEL_DIR, "") ?: "" }
 
-    fun saveProxy() {
-        prefs.edit()
-            .putBoolean(GenEngine.KEY_PROXY_ENABLED, proxyOn)
-            .putString(GenEngine.KEY_PROXY_HOST, proxyHost.trim())
-            .putInt(GenEngine.KEY_PROXY_PORT, proxyPort.trim().toIntOrNull() ?: 0)
-            .apply()
+    // ---------------- migrate confirmation dialog ----------------
+    migrateChoice?.let { newDir ->
+        val oldBytes = GenEngine.modelBytes(ctx)
+        AlertDialog(
+            onDismissRequest = { migrateChoice = null },
+            title = { Text(stringResource(R.string.migrate_confirm_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.migrate_confirm_body_fmt,
+                        String.format(Locale.US, "%.2f GB", oldBytes / 1e9),
+                    )
+                )
+            },
+            confirmButton = {
+                Row {
+                    TextButton(onClick = {
+                        migrateChoice = null
+                        startMigrate(vm, scope, ctx, newDir, copyThenClean = false) { migrating = it }
+                    }) { Text(stringResource(R.string.migrate_move)) }
+                    TextButton(onClick = {
+                        migrateChoice = null
+                        startMigrate(vm, scope, ctx, newDir, copyThenClean = true) { migrating = it }
+                    }) { Text(stringResource(R.string.migrate_copy)) }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { migrateChoice = null }) { Text(stringResource(R.string.cancel)) }
+            },
+        )
+    }
+
+    // ---------------- folder picker ----------------
+    if (dirPicker) {
+        FolderPickerDialog(
+            initial = pendingDir ?: GenEngine.modelDir(ctx),
+            onDismiss = { dirPicker = false },
+            onPicked = { picked ->
+                dirPicker = false
+                if (picked.isDirectory && picked.canWrite()) {
+                    // switch immediately, then offer migration of existing files
+                    prefs.edit().putString(GenEngine.KEY_MODEL_DIR, picked.absolutePath).apply()
+                    vm.refreshGate()
+                    if (GenEngine.modelBytes(ctx) > 0 &&
+                        !picked.absolutePath.contains(GenEngine.MODEL_DIR_NAME) == false ||
+                        GenEngine.missingFiles(ctx) != null
+                    ) {
+                        migrateChoice = picked
+                    } else {
+                        vm.toast("__saved__")
+                    }
+                } else {
+                    vm.toast("__dir_invalid__")
+                }
+            },
+        )
     }
 
     Column(
@@ -98,11 +163,11 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
             Spacer(Modifier.height(4.dp))
             if (gate.modelPresent) {
                 StatusRow(ok = true, text = stringResource(R.string.set_download_done))
-            } else {
+            } else if (gen.kind != GenBus.Kind.DOWNLOADING) {
                 Text(
                     stringResource(
                         R.string.set_download_missing_fmt,
-                        GenEngine.missingFiles(ctx)?.take(120) ?: "",
+                        (GenEngine.missingFiles(ctx) ?: "").take(120),
                     ),
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,
@@ -119,8 +184,10 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
                     Spacer(Modifier.width(10.dp))
                     Text("${gen.progress}%", style = MaterialTheme.typography.labelMedium)
                 }
+                val detailLine = if (gen.detail == "__preparing__" || gen.detail == "…")
+                    stringResource(R.string.dl_preparing) else gen.detail
                 Text(
-                    "${gen.stage}\n${gen.detail}",
+                    detailLine,
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -139,10 +206,7 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
                 ) {
                     Icon(Icons.Filled.AutoAwesome, null, Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text(
-                        if (gate.modelPresent) stringResource(R.string.set_download_btn) + "  ✓"
-                        else stringResource(R.string.set_download_btn)
-                    )
+                    Text(stringResource(R.string.set_download_btn))
                 }
             }
         }
@@ -153,16 +217,8 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
                 stringResource(R.string.set_dir_current_fmt, GenEngine.modelDir(ctx).absolutePath),
                 style = MaterialTheme.typography.bodySmall,
                 fontFamily = FontFamily.Monospace,
-            )
-            Spacer(Modifier.height(6.dp))
-            OutlinedTextField(
-                value = customDir,
-                onValueChange = { customDir = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text(stringResource(R.string.set_dir_hint), style = MaterialTheme.typography.bodySmall) },
-                singleLine = true,
-                textStyle = MaterialTheme.typography.bodySmall,
-                shape = RoundedCornerShape(12.dp),
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 stringResource(R.string.set_dir_note),
@@ -172,54 +228,36 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = {
-                        val f = java.io.File(customDir.trim())
-                        if (customDir.isBlank() || !f.isDirectory || !f.canWrite()) {
-                            vm.toast("__dir_invalid__")
-                        } else {
-                            prefs.edit().putString(GenEngine.KEY_MODEL_DIR, customDir.trim()).apply()
-                            vm.toast("__dir_applied__")
-                            vm.refreshGate()
-                        }
-                    },
-                    shape = RoundedCornerShape(999.dp),
-                ) { Text(stringResource(R.string.set_dir_apply)) }
-                OutlinedButton(
-                    onClick = {
-                        prefs.edit().putString(GenEngine.KEY_MODEL_DIR, null).apply()
-                        customDir = ""
-                        vm.toast("__dir_applied__")
-                        vm.refreshGate()
-                    },
-                    shape = RoundedCornerShape(999.dp),
-                ) { Text(stringResource(R.string.set_dir_reset)) }
-            }
-            if (customDir.isNotBlank() && gate.modelPresent) {
-                val scope = rememberCoroutineScope()
-                OutlinedButton(
-                    onClick = {
-                        val from = java.io.File(ctx.getExternalFilesDir(null), GenEngine.MODEL_DIR_NAME)
-                        val to = java.io.File(customDir.trim())
-                        migrating = 0
-                        scope.launch {
-                            val ok = ModelMigrator.move(ctx, from, to) { p -> migrating = p }
-                            migrating = null
-                            vm.toast(if (ok) "__migrate_done__" else "__dir_invalid__")
-                            vm.refreshGate()
-                        }
+                        pendingDir = File(currentCustom).takeIf { it.isDirectory }
+                        dirPicker = true
                     },
                     enabled = migrating == null && gen.kind != GenBus.Kind.DOWNLOADING,
                     shape = RoundedCornerShape(999.dp),
                 ) {
-                    if (migrating != null) {
-                        CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.set_migrating_fmt, migrating ?: 0))
-                    } else {
-                        Icon(Icons.Filled.DriveFileMove, null, Modifier.size(16.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.set_dir_migrate))
-                    }
+                    Icon(Icons.Filled.FolderOpen, null, Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.set_dir_pick))
                 }
+                if (currentCustom.isNotBlank()) {
+                    OutlinedButton(
+                        onClick = { confirmResetDir = true },
+                        shape = RoundedCornerShape(999.dp),
+                    ) { Text(stringResource(R.string.set_dir_reset)) }
+                }
+            }
+            if (migrating != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        stringResource(R.string.set_migrating_fmt, migrating ?: 0),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                LinearProgressIndicator(
+                    progress = { (migrating ?: 0) / 100f },
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
 
@@ -233,7 +271,14 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.set_proxy_enable), style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.weight(1f))
-                Switch(checked = proxyOn, onCheckedChange = { proxyOn = it; saveProxy() })
+                Switch(
+                    checked = proxyOn,
+                    onCheckedChange = {
+                        proxyOn = it
+                        saveProxy(prefs, proxyOn, proxyHost, proxyPort)
+                        vm.toast("__saved__")
+                    },
+                )
             }
             if (proxyOn) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -248,7 +293,7 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
                     )
                     OutlinedTextField(
                         value = proxyPort,
-                        onValueChange = { proxyPort = it.filter { c -> c.isDigit() } },
+                        onValueChange = { proxyPort = it.filter { c -> c.isDigit() }.take(5) },
                         modifier = Modifier.weight(1f),
                         placeholder = { Text(stringResource(R.string.set_proxy_port)) },
                         singleLine = true,
@@ -256,7 +301,10 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
                         shape = RoundedCornerShape(12.dp),
                     )
                 }
-                TextButton(onClick = { saveProxy() }) { Text("Save") }
+                TextButton(onClick = {
+                    saveProxy(prefs, proxyOn, proxyHost, proxyPort)
+                    vm.toast("__saved__")
+                }) { Text(stringResource(R.string.toast_saved)) }
             }
         }
 
@@ -265,19 +313,19 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
                     selected = lang == 0,
-                    onClick = { vm.setLanguage(0) },
+                    onClick = { vm.setLanguage(0); vm.toast("__lang__") },
                     label = { Text(stringResource(R.string.set_lang_system)) },
                     shape = RoundedCornerShape(999.dp),
                 )
                 FilterChip(
                     selected = lang == 1,
-                    onClick = { vm.setLanguage(1) },
+                    onClick = { vm.setLanguage(1); vm.toast("__lang__") },
                     label = { Text(stringResource(R.string.set_lang_en)) },
                     shape = RoundedCornerShape(999.dp),
                 )
                 FilterChip(
                     selected = lang == 2,
-                    onClick = { vm.setLanguage(2) },
+                    onClick = { vm.setLanguage(2); vm.toast("__lang__") },
                     label = { Text(stringResource(R.string.set_lang_zh)) },
                     shape = RoundedCornerShape(999.dp),
                 )
@@ -300,14 +348,27 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
         // ---------------- about ----------------
         SettingsCard(title = stringResource(R.string.set_about_title)) {
             Text(
-                stringResource(R.string.set_about_body, "1.1.0"),
+                stringResource(R.string.set_about_body, "1.1.1"),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Language, null, Modifier.size(16.dp), tint = AppleTokens.ActionBlue)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    stringResource(R.string.set_about_repo),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = AppleTokens.ActionBlue,
+                    modifier = Modifier.clickable {
+                        ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Samge0/Qanvas")))
+                    },
+                )
+            }
         }
         Spacer(Modifier.height(30.dp))
     }
 
+    // ---------------- dialogs ----------------
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
@@ -317,6 +378,7 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
                 TextButton(onClick = {
                     confirmDelete = false
                     Thread { GenEngine.deleteModels(ctx) }.start()
+                    vm.toast("__saved__")
                     vm.refreshGate()
                 }) { Text(stringResource(R.string.delete_confirm), color = AppleTokens.Red) }
             },
@@ -325,6 +387,143 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
             },
         )
     }
+    if (confirmResetDir) {
+        AlertDialog(
+            onDismissRequest = { confirmResetDir = false },
+            title = { Text(stringResource(R.string.set_dir_reset)) },
+            text = { Text(stringResource(R.string.reset_dir_confirm)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmResetDir = false
+                    prefs.edit().putString(GenEngine.KEY_MODEL_DIR, null).apply()
+                    vm.toast("__reset_dir__")
+                    vm.refreshGate()
+                }) { Text(stringResource(R.string.set_dir_reset)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmResetDir = false }) { Text(stringResource(R.string.cancel)) }
+            },
+        )
+    }
+}
+
+private fun saveProxy(prefs: android.content.SharedPreferences, on: Boolean, host: String, port: String) {
+    prefs.edit()
+        .putBoolean(GenEngine.KEY_PROXY_ENABLED, on)
+        .putString(GenEngine.KEY_PROXY_HOST, host.trim())
+        .putInt(GenEngine.KEY_PROXY_PORT, port.trim().toIntOrNull() ?: 0)
+        .apply()
+}
+
+private fun startMigrate(
+    vm: MainViewModel,
+    scope: kotlinx.coroutines.CoroutineScope,
+    ctx: android.content.Context,
+    target: File,
+    copyThenClean: Boolean,
+    setProgress: (Int?) -> Unit,
+) {
+    val from = GenEngine.modelDir(ctx).let { cur ->
+        // migrate from the OLD location: previous custom dir or the default dir
+        if (cur.absolutePath != target.absolutePath) cur
+        else File(ctx.getExternalFilesDir(null), GenEngine.MODEL_DIR_NAME)
+    }
+    setProgress(0)
+    scope.launch {
+        val ok = ModelMigrator.move(ctx, from, target, copyThenClean) { p -> setProgress(p) }
+        setProgress(null)
+        vm.toast(if (ok) "__migrate_done__" else "__dir_invalid__")
+        vm.refreshGate()
+    }
+}
+
+// ==================================================================== folder picker (local filesystem)
+
+@Composable
+fun FolderPickerDialog(initial: File, onDismiss: () -> Unit, onPicked: (File) -> Unit) {
+    // seed candidates: app default dirs + shared storage roots
+    val seeds = remember {
+        mutableListOf<File>().apply {
+            android.os.Environment.getExternalStorageDirectory()?.let { add(it) }
+        }
+    }
+    var current by remember { mutableStateOf(initial.takeIf { it.isDirectory } ?: seeds.firstOrNull() ?: android.os.Environment.getExternalStorageDirectory()!!) }
+    var entries by remember(current) {
+        mutableStateOf(
+            current.listFiles { f -> f.isDirectory }?.sortedBy { it.name.lowercase(Locale.ROOT) } ?: emptyList()
+        )
+    }
+    var chosen by remember { mutableStateOf(current) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.dir_pick_title)) },
+        text = {
+            Column {
+                Text(
+                    current.absolutePath,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (current.parentFile != null && current.parentFile!!.canRead()) {
+                        TextButton(onClick = {
+                            current = current.parentFile!!
+                            chosen = current
+                        }) {
+                            Icon(Icons.Filled.ArrowUpward, null, Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(stringResource(R.string.dir_pick_up))
+                        }
+                    }
+                    FilterChip(
+                        selected = false,
+                        onClick = {
+                            val def = android.os.Environment.getExternalStorageDirectory()
+                            if (def != null && def.isDirectory) { current = def; chosen = def }
+                        },
+                        label = { Text(stringResource(R.string.dir_chip_default)) },
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                LazyColumn(Modifier.height(280.dp)) {
+                    items(entries) { dir ->
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .clickable {
+                                    chosen = dir
+                                    if (dir.canRead()) { current = dir }
+                                }
+                                .padding(vertical = 10.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                if (dir == chosen) Icons.Filled.FolderOpen else Icons.Filled.Folder,
+                                null, Modifier.size(20.dp),
+                                tint = if (dir == chosen) AppleTokens.ActionBlue else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                dir.name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onPicked(chosen) }) { Text(stringResource(R.string.dir_pick_use)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
+        },
+    )
 }
 
 @Composable

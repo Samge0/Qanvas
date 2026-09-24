@@ -125,6 +125,26 @@
     <string name="set_about_title">About</string>
     <string name="set_about_body">Qanvas %1$s · runtime AAR v0.2.2 · model: evankuo/Qwen-Image-2.1-MNN (Qwen Research License)</string>
 
+    <!-- about repo link -->
+    <string name="set_about_repo">github.com/Samge0/Qanvas</string>
+
+    <!-- v1.1.1 additions -->
+    <string name="toast_saved">Settings saved</string>
+    <string name="toast_lang_set">Language updated</string>
+    <string name="toast_reset_dir">Reset to default directory</string>
+    <string name="dl_preparing">Preparing download… requesting file metadata</string>
+    <string name="set_dir_pick">Choose folder…</string>
+    <string name="dir_pick_title">Select model directory</string>
+    <string name="dir_pick_use">Use this folder</string>
+    <string name="dir_pick_up">Up</string>
+    <string name="dir_chip_default">Default storage</string>
+    <string name="migrate_confirm_title">Move existing model files?</string>
+    <string name="migrate_confirm_body_fmt">Found %1$s of model files in the old directory. Choose how to transfer:</string>
+    <string name="migrate_move">Move (fast)</string>
+    <string name="migrate_copy">Copy, then clean old</string>
+    <string name="reset_dir_confirm">Reset to the default app directory? Files in the custom directory stay in place.</string>
+    <string name="dir_pick_storage_fmt">Storage %1$d</string>
+
     <!-- notifications (service) -->
     <string name="notif_title">Qanvas</string>
     <string name="notif_downloading">Downloading model</string>
