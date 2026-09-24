@@ -1,4 +1,4 @@
-# Qanvas · AI 画布 in your pocket
+# Qanvas · AI Canvas in your pocket
 
 **Qwen-Image-2.1 (7B) text-to-image, photo editing and RGBA stickers — 100% on-device, 100% private.**
 
@@ -6,12 +6,20 @@
 [![License](https://img.shields.io/badge/code-Apache--2.0-blue)](LICENSE)
 [![Model](https://img.shields.io/badge/model-Qwen--Image--2.1--MNN-6C5CE7)](https://huggingface.co/evankuo/Qwen-Image-2.1-MNN)
 
-> ⬇️ **Download**: [`Qanvas-v1.0.0-arm64.apk`](../../releases) (20 MB app · one-time 10.3 GB model download in-app)
+> ⬇️ **Download**: [`Qanvas-v1.x.x-arm64.apk`](../../releases) (20 MB app · one-time 10.3 GB model download in-app)
 
 No cloud. No account. No upload. Your photos never leave the phone.
 
 Built on [evankuo/Qwen-Image-2.1-MNN](https://huggingface.co/evankuo/Qwen-Image-2.1-MNN) + the
 [scsonic/libQwenImage21](https://github.com/scsonic/libQwenImage21) runtime (MNN · int4 · OpenCL).
+
+
+> The demo video has been compressed. Download the APK for the best visual quality.
+
+
+https://github.com/user-attachments/assets/901ceba3-d1f2-41c7-8134-39de774b952b
+
+
 
 ## What it does
 
