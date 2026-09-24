@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Qanvas: gradient "Q" ring + brush stroke -->
+    <group android:scaleX="0.55" android:scaleY="0.55" android:pivotX="54" android:pivotY="54">
+        <path
+            android:fillColor="#6C5CE7"
+            android:pathData="M54,24 A30,30 0 1,0 54,84 A30,30 0 0,0 54,24 Z M54,34 A20,20 0 1,1 54,74 A20,20 0 0,1 54,34 Z" />
+        <path
+            android:fillColor="#00B8D9"
+            android:pathData="M62,62 L80,80 A4,4 0 0,1 74,86 L58,70 Z" />
+        <path
+            android:fillColor="#FF7EB6"
+            android:pathData="M38,54 A16,16 0 0,1 70,54 L60,54 A6,6 0 0,0 48,54 Z" />
+    </group>
+</vector>
