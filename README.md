@@ -1,6 +1,8 @@
 # Qanvas · AI Canvas in your pocket
 
-> 🌐 **[在线宣传页](https://samge0.github.io/Qanvas/)** — 功能总览、后台生成原理、真机性能数据一页看懂
+English | [简体中文](README-zh.md)
+
+> 🌐 **[Promo page](https://samge0.github.io/Qanvas/)** — feature overview, background-generation internals and on-device benchmark numbers on one page
 
 **Qwen-Image-2.1 (7B) text-to-image, photo editing and RGBA stickers — 100% on-device, 100% private.**
 
