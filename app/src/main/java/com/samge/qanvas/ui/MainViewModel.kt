@@ -102,6 +102,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val prefillPrompt: StateFlow<String?> = _prefillPrompt.asStateFlow()
     fun consumePrefill() { _prefillPrompt.value = null }
 
+    /** Regenerate request: prefill + auto-jump to Create (user still taps Generate). */
+    var regenPrompt: String?
+        get() = _regenPrompt.value
+        set(v) {
+            _regenPrompt.value = v
+            if (v != null) _events.value = UiEvent.GoTab(0)
+        }
+    private val _regenPrompt = MutableStateFlow<String?>(null)
+    val regenPromptFlow: StateFlow<String?> = _regenPrompt.asStateFlow()
+    fun consumeRegen() { _regenPrompt.value = null }
+
     /** Image record loaded into the Edit tab. */
     private val _editFromRecord = MutableStateFlow<GenRecord?>(null)
     val editFromRecord: StateFlow<GenRecord?> = _editFromRecord.asStateFlow()
@@ -153,7 +164,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun startGeneration(prompt: String, mode: String, input: PickedImage?, tab: Int) {
         val app = getApplication<Application>()
-        if (GenService.running) return
+        if (GenService.running || GenBus.state.value.originTab >= 0 &&
+            (GenBus.state.value.kind == GenBus.Kind.LOADING || GenBus.state.value.kind == GenBus.Kind.GENERATING)
+        ) return
         prefs.edit()
             .putInt("ratio", ratioOrdinal.value)
             .putInt("tier", tierOrdinal.value)
@@ -264,9 +277,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val picked = PickedImage(uri, opts.outWidth, opts.outHeight, dst.absolutePath)
                 withContext(Dispatchers.Main) { _editInput.value = picked }
             } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    _editInput.value = PickedImage(uri, 0, 0, "")
-                }
+                // leave input unset — an empty cachePath would crash the service
+                withContext(Dispatchers.Main) { _toast.value = "__save_failed__" }
             }
         }
     }

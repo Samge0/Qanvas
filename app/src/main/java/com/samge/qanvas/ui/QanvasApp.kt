@@ -81,6 +81,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -441,7 +442,7 @@ fun ProgressCard(gen: GenBus.State, estimateSec: Int, onCancel: (() -> Unit)? = 
     }
 }
 
-/** Fullscreen zoomable image viewer. */
+/** Fullscreen zoomable viewer — iOS-style frosted-glass backdrop. */
 @Composable
 fun ZoomDialog(path: String, onDismiss: () -> Unit) {
     var scale by remember { mutableFloatStateOf(1f) }
@@ -451,11 +452,36 @@ fun ZoomDialog(path: String, onDismiss: () -> Unit) {
         val o = android.graphics.BitmapFactory.Options().apply { inSampleSize = 1 }
         android.graphics.BitmapFactory.decodeFile(path, o)
     }
-    Dialog(onDismissRequest = onDismiss) {
-        Box(
-            Modifier.fillMaxSize().background(Color(0xEE101014)),
-            contentAlignment = Alignment.Center,
-        ) {
+    // blurred backdrop source (downscaled for cheap blur)
+    val backdrop = remember(path) {
+        runCatching {
+            val o = android.graphics.BitmapFactory.Options().apply { inSampleSize = 16 }
+            android.graphics.BitmapFactory.decodeFile(path, o)
+        }.getOrNull()
+    }
+    Dialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(Modifier.fillMaxSize()) {
+            // frosted glass: dim + blurred image + dark scrim, edge-to-edge
+            Box(
+                Modifier.fillMaxSize().background(Color(0xB3000000)),
+            ) {
+                if (backdrop != null) {
+                    Image(
+                        bitmap = backdrop.asImageBitmap(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize()
+                            .graphicsLayer(
+                                scaleX = 1.4f, scaleY = 1.4f,
+                                alpha = 0.45f,
+                                // software blur via RenderEffect where available
+                            )
+                            .blur(48.dp),
+                        contentScale = ContentScale.Crop,
+                    )
+                }
+                Box(Modifier.fillMaxSize().background(Color(0x33000000)))
+            }
+            // the sharp image floats above
             if (bmp != null) {
                 Image(
                     bitmap = bmp.asImageBitmap(),
@@ -477,8 +503,6 @@ fun ZoomDialog(path: String, onDismiss: () -> Unit) {
                         .clickable { if (scale > 1f) { scale = 1f; offsetX = 0f; offsetY = 0f } else onDismiss() },
                     contentScale = ContentScale.Fit,
                 )
-            } else {
-                Text("…", color = Color.White)
             }
             IconButton(
                 onClick = onDismiss,
@@ -488,9 +512,12 @@ fun ZoomDialog(path: String, onDismiss: () -> Unit) {
             }
             Text(
                 stringResource(R.string.tap_zoom_hint),
-                color = Color(0x99FFFFFF),
+                color = Color(0xB3FFFFFF),
                 style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(16.dp),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter).navigationBarsPadding().padding(16.dp)
+                    .background(Color(0x66000000), RoundedCornerShape(999.dp))
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
             )
         }
     }
@@ -552,9 +579,13 @@ fun CreateTab(vm: MainViewModel) {
     val prefill by vm.prefillPrompt.collectAsState()
     var prompt by rememberSaveable { mutableStateOf("") }
 
-    // consume prefill (inspo / clipboard / reuse)
+    // consume prefill (inspo / clipboard / reuse) and regenerate requests
+    val regen by vm.regenPromptFlow.collectAsState()
     LaunchedEffect(prefill) {
         if (prefill != null) { prompt = prefill!!; vm.consumePrefill() }
+    }
+    LaunchedEffect(regen) {
+        if (regen != null) { prompt = regen!!; vm.consumeRegen() }
     }
 
     LazyColumn(
@@ -963,7 +994,7 @@ fun RecordDetailDialog(vm: MainViewModel, rec: GenRecord, onClose: () -> Unit) {
                     ) {
                         Icon(Icons.Filled.Share, null, Modifier.size(15.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.d_share), fontSize = 13.sp, maxLines = 1)
+                        Text(stringResource(R.string.d_share), maxLines = 1)
                     }
                     OutlinedButton(
                         onClick = {
@@ -989,7 +1020,7 @@ fun RecordDetailDialog(vm: MainViewModel, rec: GenRecord, onClose: () -> Unit) {
                     ) {
                         Icon(Icons.Outlined.PhotoLibrary, null, Modifier.size(15.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.save_image), fontSize = 13.sp, maxLines = 1)
+                        Text(stringResource(R.string.save_image), maxLines = 1)
                     }
                     OutlinedButton(
                         onClick = { vm.sendToEdit(rec); onClose() },
@@ -999,13 +1030,44 @@ fun RecordDetailDialog(vm: MainViewModel, rec: GenRecord, onClose: () -> Unit) {
                     ) {
                         Icon(Icons.Filled.Edit, null, Modifier.size(15.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.d_edit_img), fontSize = 13.sp, maxLines = 1)
+                        Text(stringResource(R.string.d_edit_img), maxLines = 1)
                     }
                     OutlinedButton(
-                        onClick = { vm.reusePrompt(rec); onClose() },
+                        onClick = {
+                            // regenerate: same params, fresh seed, run on Create tab
+                            vm.seedText.value = (System.currentTimeMillis() % 1_000_000L).toString()
+                            vm.ratioOrdinal.value = rec.ratio.takeIf { it in 0..6 } ?: vm.ratioOrdinal.value
+                            vm.tierOrdinal.value = rec.tier.takeIf { it in 0..2 } ?: vm.tierOrdinal.value
+                            vm.steps.value = rec.steps
+                            vm.regenPrompt = rec.prompt
+                            onClose()
+                        },
                         shape = RoundedCornerShape(999.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    ) { Text(stringResource(R.string.d_reuse), fontSize = 13.sp, maxLines = 1) }
+                    ) { Text(stringResource(R.string.d_regen), maxLines = 1) }
+                    var confirmDel by remember { mutableStateOf(false) }
+                    OutlinedButton(
+                        onClick = { confirmDel = true },
+                        shape = RoundedCornerShape(999.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    ) {
+                        Text(stringResource(R.string.d_delete), color = AppleTokens.Red, maxLines = 1)
+                    }
+                    if (confirmDel) {
+                        AlertDialog(
+                            onDismissRequest = { confirmDel = false },
+                            title = { Text(stringResource(R.string.delete_title)) },
+                            text = { Text(rec.prompt) },
+                            confirmButton = {
+                                TextButton(onClick = { vm.deleteRecord(rec); confirmDel = false; onClose() }) {
+                                    Text(stringResource(R.string.delete_confirm), color = AppleTokens.Red)
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { confirmDel = false }) { Text(stringResource(R.string.cancel)) }
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -1191,7 +1253,7 @@ fun MissingModelGate(vm: MainViewModel) {
             ) {
                 Icon(Icons.Filled.AutoAwesome, null, Modifier.size(16.dp))
                 Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.set_download_btn), fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                Text(stringResource(R.string.set_download_btn), fontWeight = FontWeight.Medium, )
             }
         }
         item { Spacer(Modifier.height(30.dp)) }
@@ -1246,11 +1308,11 @@ fun GenerateButton(enabled: Boolean, running: Boolean, modelReady: Boolean, onCl
         if (running) {
             CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
             Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.btn_generate_running), fontWeight = FontWeight.Medium, fontSize = 14.sp)
+            Text(stringResource(R.string.btn_generate_running), fontWeight = FontWeight.Medium, )
         } else {
             Icon(Icons.Filled.AutoAwesome, null, Modifier.size(16.dp))
             Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.btn_generate), fontWeight = FontWeight.Medium, fontSize = 14.sp)
+            Text(stringResource(R.string.btn_generate), fontWeight = FontWeight.Medium, )
         }
     }
 }

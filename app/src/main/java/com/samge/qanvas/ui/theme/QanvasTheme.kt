@@ -74,14 +74,18 @@ private val DarkScheme = darkColorScheme(
     error = Color(0xFFFF453A),
 )
 
+// Unified compact scale (v1.1.6): one source of truth for the whole app.
+// Buttons/CTAs use labelLarge 14sp; secondary/card actions 13sp via explicit override;
+// chips use labelMedium 12sp; body copy 13-14sp. Nothing renders above 16sp except titles.
 private val AppleTypography = Typography(
-    headlineSmall = TextStyle(fontWeight = FontWeight(600), fontSize = 21.sp, letterSpacing = 0.2.sp),
-    titleMedium = TextStyle(fontWeight = FontWeight(600), fontSize = 17.sp, letterSpacing = (-0.374).sp),
-    bodyLarge = TextStyle(fontWeight = FontWeight(400), fontSize = 17.sp, lineHeight = 25.sp, letterSpacing = (-0.374).sp),
-    bodyMedium = TextStyle(fontWeight = FontWeight(400), fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = (-0.224).sp),
-    bodySmall = TextStyle(fontWeight = FontWeight(400), fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = (-0.12).sp),
-    labelLarge = TextStyle(fontWeight = FontWeight(400), fontSize = 17.sp, letterSpacing = (-0.374).sp),
+    headlineSmall = TextStyle(fontWeight = FontWeight(600), fontSize = 19.sp, letterSpacing = 0.2.sp),
+    titleMedium = TextStyle(fontWeight = FontWeight(600), fontSize = 16.sp, letterSpacing = (-0.3).sp),
+    bodyLarge = TextStyle(fontWeight = FontWeight(400), fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = (-0.2).sp),
+    bodyMedium = TextStyle(fontWeight = FontWeight(400), fontSize = 13.sp, lineHeight = 18.sp, letterSpacing = (-0.15).sp),
+    bodySmall = TextStyle(fontWeight = FontWeight(400), fontSize = 11.5.sp, lineHeight = 15.sp, letterSpacing = (-0.1).sp),
+    labelLarge = TextStyle(fontWeight = FontWeight(500), fontSize = 14.sp, letterSpacing = (-0.2).sp),
     labelMedium = TextStyle(fontWeight = FontWeight(500), fontSize = 12.sp, letterSpacing = 0.1.sp),
+    labelSmall = TextStyle(fontWeight = FontWeight(500), fontSize = 11.sp, letterSpacing = 0.1.sp),
 )
 
 @Composable

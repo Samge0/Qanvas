@@ -67,6 +67,7 @@ import com.samge.qanvas.core.GenService
 import com.samge.qanvas.core.BgKeepAlive
 import com.samge.qanvas.core.ModelMigrator
 import com.samge.qanvas.ui.theme.AppleTokens
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.Locale
@@ -347,6 +348,11 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Text(
+                stringResource(R.string.set_keep_warn),
+                style = MaterialTheme.typography.bodySmall,
+                color = AppleTokens.Orange,
+            )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.set_keep_enable), style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.weight(1f))
@@ -449,7 +455,7 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
         // ---------------- about ----------------
         SettingsCard(title = stringResource(R.string.set_about_title)) {
             Text(
-                stringResource(R.string.set_about_body, "1.1.5"),
+                stringResource(R.string.set_about_body, "1.1.6"),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -478,9 +484,13 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
-                    Thread { GenEngine.deleteModels(ctx) }.start()
-                    vm.toast("__saved__")
-                    vm.refreshGate()
+                    scope.launch(Dispatchers.IO) {
+                        GenEngine.deleteModels(ctx)
+                        kotlinx.coroutines.withContext(Dispatchers.Main) {
+                            vm.toast("__saved__")
+                            vm.refreshGate()
+                        }
+                    }
                 }) { Text(stringResource(R.string.delete_confirm), color = AppleTokens.Red) }
             },
             dismissButton = {
@@ -542,13 +552,14 @@ private fun startMigrate(
 
 @Composable
 fun FolderPickerDialog(initial: File, onDismiss: () -> Unit, onPicked: (File) -> Unit) {
-    // seed candidates: app default dirs + shared storage roots
-    val seeds = remember {
-        mutableListOf<File>().apply {
-            android.os.Environment.getExternalStorageDirectory()?.let { add(it) }
-        }
+    // canonical shared-storage root (legacy API returns this reliably on all API levels)
+    val storageRoot = remember {
+        runCatching { java.io.File("/storage/emulated/0") }
+            .getOrNull()?.takeIf { it.isDirectory }
+            ?: android.os.Environment.getExternalStorageDirectory()
+            ?: java.io.File("/")
     }
-    var current by remember { mutableStateOf(initial.takeIf { it.isDirectory } ?: seeds.firstOrNull() ?: android.os.Environment.getExternalStorageDirectory()!!) }
+    var current by remember { mutableStateOf(initial.takeIf { it.isDirectory } ?: storageRoot) }
     var entries by remember(current) {
         mutableStateOf(
             current.listFiles { f -> f.isDirectory }?.sortedBy { it.name.lowercase(Locale.ROOT) } ?: emptyList()
@@ -583,8 +594,7 @@ fun FolderPickerDialog(initial: File, onDismiss: () -> Unit, onPicked: (File) ->
                     FilterChip(
                         selected = false,
                         onClick = {
-                            val def = android.os.Environment.getExternalStorageDirectory()
-                            if (def != null && def.isDirectory) { current = def; chosen = def }
+                            if (storageRoot.isDirectory) { current = storageRoot; chosen = storageRoot }
                         },
                         label = { Text(stringResource(R.string.dir_chip_default)) },
                     )

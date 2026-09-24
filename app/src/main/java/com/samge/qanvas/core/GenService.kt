@@ -217,7 +217,7 @@ class GenService : Service() {
                 GenBus.post(GenBus.State(GenBus.Kind.DOWNLOADING, 0, detail = "__preparing__"))
                 d.download(GenEngine.modelDir(this@GenService)) { file, done, total ->
                     val pct = (100L * done / total.coerceAtLeast(1L)).toInt()
-                    val detail = String.format("%.2f/%.2f GB", done / 1e9, total / 1e9)
+                    val detail = String.format(java.util.Locale.US, "%.2f/%.2f GB", done / 1e9, total / 1e9)
                     notifyProgress(NOTIF_DL, CH_DL, "dl", detail, pct)
                     GenBus.post(GenBus.State(GenBus.Kind.DOWNLOADING, pct, file, detail = detail))
                 }
@@ -375,20 +375,24 @@ class GenService : Service() {
                             error = error ?: "unknown", originTab = tab)
                     )
                 }
-                try {
-                    val dao = (application as QanvasApp).db.dao()
-                    withContext(Dispatchers.IO) {
-                        dao.insert(
-                            GenRecord(
-                                prompt = prompt, mode = mode, width = width, height = height,
-                                steps = steps, seed = seed, outPath = out.absolutePath,
-                                inPath = inputPath, durationMs = dur,
-                                startAt = startAt, modelLoadMs = loadMs, genMs = genMs, pausedMs = pausedMs,
-                                endAt = endAt, ratio = 0, tier = 0,
+                // Only successful generations enter the gallery — cancelled/failed
+                // runs would reference files that don't exist.
+                if (doneFile != null) {
+                    try {
+                        val dao = (application as QanvasApp).db.dao()
+                        withContext(Dispatchers.IO) {
+                            dao.insert(
+                                GenRecord(
+                                    prompt = prompt, mode = mode, width = width, height = height,
+                                    steps = steps, seed = seed, outPath = out.absolutePath,
+                                    inPath = inputPath, durationMs = dur,
+                                    startAt = startAt, modelLoadMs = loadMs, genMs = genMs, pausedMs = pausedMs,
+                                    endAt = endAt, ratio = ratioOrd, tier = tierOrd,
+                                )
                             )
-                        )
+                        }
+                    } catch (_: Exception) {
                     }
-                } catch (_: Exception) {
                 }
                 running = false
                 BgKeepAlive.stopSilent()

@@ -181,6 +181,13 @@
     <string name="set_keep_title">性能</string>
     <string name="set_keep_enable">模型常驻内存（热加载）</string>
     <string name="set_keep_desc">跳过每次生成约 20–30 秒的模型加载。开启期间常驻占用约 4–6 GB 内存，随时关闭即可释放。</string>
+    <string name="set_keep_warn">⚠️ 谨慎开启：开启后常驻占用约 4–6 GB 内存。运行内存小于 12 GB 的机型、或后台有其他大型应用时，生成更容易因内存不足而失败。建议仅在 12 GB+ 且以连续创作为主的设备上开启。</string>
+
+    <!-- v1.1.6 additions -->
+    <string name="d_delete">删除</string>
+    <string name="d_regen">重新生成</string>
+    <string name="d_regenerate_confirm_title">重新生成这个作品？</string>
+    <string name="d_regenerate_confirm_body">将在创作页以相同提示词、尺寸、步数和新的随机种子重新生成。</string>
 
     <!-- v1.1.3 additions -->
     <string name="cancel_job">取消</string>
