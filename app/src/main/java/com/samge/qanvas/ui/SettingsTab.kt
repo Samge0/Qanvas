@@ -360,7 +360,9 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
                     onCheckedChange = {
                         keep = it
                         prefs.edit().putBoolean(GenEngine.KEY_KEEP_LOADED, it).apply()
-                        if (!it) GenService.releaseHot()
+                        // never call releaseHot() on the main thread: close()
+                        // blocks on the native instance lock while a job runs
+                        if (!it) scope.launch(Dispatchers.IO) { GenService.releaseHot() }
                         vm.toast("__saved__")
                     },
                 )

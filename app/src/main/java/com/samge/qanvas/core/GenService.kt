@@ -62,6 +62,21 @@ class GenService : Service() {
         var currentTab: Int = -1
             private set
 
+        /** Monotonic job counter; bumping it supersedes every earlier job. */
+        private val genCounter = java.util.concurrent.atomic.AtomicLong(0)
+
+        /** Job that currently owns UI/service state (posts, cleanup). */
+        @Volatile
+        var activeGen: Long = 0
+            private set
+
+        /** Job currently inside a native generate/edit call; 0 = none.
+         *  MNN cannot be interrupted mid-run, so a killed job keeps this until
+         *  its native call returns — new jobs wait for it to avoid OOM. */
+        @Volatile
+        var nativeHolderGen: Long = 0
+            private set
+
         /** Cooperative cancellation flag for the running generation. */
         @Volatile
         var cancelRequested: Boolean = false
@@ -76,16 +91,23 @@ class GenService : Service() {
             cancelRequested = true
         }
 
-        /** Hard-cancel a running generation job (called by ACTION_STOP). */
+        /**
+         * Hard-cancel a running generation job (called by ACTION_STOP).
+         * Never blocks on the native lock: releaseHot() runs on the IO thread,
+         * the zombie native call keeps running undisturbed but its result is
+         * discarded (guarded by [activeGen]).
+         */
         fun killRunning(svc: GenService) {
             cancelRequested = true
             running = false
-            releaseHot()
+            currentTab = -1
+            activeGen = 0 // supersede: zombie posts are dropped by generation check
+            svc.scope.launch(Dispatchers.IO) { releaseHot() }
             BgKeepAlive.stopSilent()
             BgKeepAlive.removeOverlay(svc)
             svc.stopForeground(STOP_FOREGROUND_REMOVE)
             svc.stopSelf()
-            GenBus.post(GenBus.State(GenBus.Kind.ERROR, error = "__cancelled__", originTab = currentTab))
+            GenBus.post(GenBus.State(GenBus.Kind.ERROR, error = "__cancelled__", originTab = -1))
         }
 
         @Volatile
@@ -141,7 +163,7 @@ class GenService : Service() {
         }
     }
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var job: Job? = null
     private val cancelled = AtomicBoolean(false)
     private var downloader: ModelDownloader? = null
@@ -166,6 +188,9 @@ class GenService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
+                // We were started via startForegroundService but never promoted
+                // ourselves — do it now to satisfy the 5s promotion contract.
+                startForeground(NOTIF_GEN, notif(CH_GEN, getString(R.string.notif_title), "", 0, true, NOTIF_REQ_GEN))
                 // hard-kill the running job (generation or download)
                 job?.cancel()
                 if (running) {
@@ -178,7 +203,9 @@ class GenService : Service() {
                 }
             }
             ACTION_RELEASE -> {
+                startForeground(NOTIF_GEN, notif(CH_GEN, getString(R.string.notif_title), "", 0, true, NOTIF_REQ_GEN))
                 releaseHot()
+                stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
             ACTION_DOWNLOAD -> {
@@ -279,6 +306,8 @@ class GenService : Service() {
         running = true
         cancelRequested = false
         currentTab = tab
+        val myGen = genCounter.incrementAndGet()
+        activeGen = myGen
         val prefs = GenEngine.prefs(this)
         val useSilent = prefs.getBoolean(GenEngine.KEY_BG_SILENT, true)
         val useOverlay = prefs.getBoolean(GenEngine.KEY_BG_OVERLAY, true)
@@ -293,6 +322,16 @@ class GenService : Service() {
         job = scope.launch {
             // run the whole coroutine on Default but boost its worker thread
             android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY)
+            // A previously killed job may still be inside its native call (MNN
+            // cannot be interrupted). Wait for it to finish before loading
+            // models again, or the second instance will OOM the first.
+            var waitLogged = false
+            while (nativeHolderGen != 0L && nativeHolderGen != myGen) {
+                if (!waitLogged) { waitLogged = true; }
+                GenBus.post(GenBus.State(GenBus.Kind.LOADING, stage = "load", originTab = tab))
+                kotlinx.coroutines.delay(500)
+            }
+            nativeHolderGen = myGen
             var doneFile: File? = null
             var error: String? = null
             var oom = false
@@ -371,6 +410,7 @@ class GenService : Service() {
                     }
                     doneFile = out
                 } finally {
+                    if (nativeHolderGen == myGen) nativeHolderGen = 0
                     if (!keepLoaded) {
                         runCatching { qi.close() }
                     }
@@ -393,11 +433,14 @@ class GenService : Service() {
                 val loadMs = genStart - perf
                 val genMs = endMs - genStart
                 val dur = endMs - perf
-                if (doneFile != null) {
+                // Zombie guard: a job killed mid-native-run still lands here when
+                // its native call finally returns — drop everything it produced.
+                val superseded = activeGen != myGen
+                if (doneFile != null && !superseded) {
                     GenBus.post(GenBus.State(GenBus.Kind.DONE, 100, "done",
                         doneFile = doneFile!!.absolutePath, pausedMs = pausedMs, originTab = tab))
-                } else if (cancelledByUser) {
-                    GenBus.post(GenBus.State(GenBus.Kind.ERROR, error = "__cancelled__", originTab = tab))
+                } else if (cancelledByUser || superseded) {
+                    runCatching { doneFile?.delete() } // discard the zombie's output
                 } else {
                     GenBus.post(
                         GenBus.State(if (oom) GenBus.Kind.OOM else GenBus.Kind.ERROR,
@@ -406,7 +449,7 @@ class GenService : Service() {
                 }
                 // Only successful generations enter the gallery — cancelled/failed
                 // runs would reference files that don't exist.
-                if (doneFile != null) {
+                if (doneFile != null && !superseded) {
                     try {
                         val dao = (application as QanvasApp).db.dao()
                         withContext(Dispatchers.IO) {
@@ -424,7 +467,7 @@ class GenService : Service() {
                     }
                 }
                 running = false
-                currentTab = -1
+                if (activeGen == myGen) currentTab = -1
                 BgKeepAlive.stopSilent()
                 BgKeepAlive.removeOverlay(this@GenService)
                 runCatching { if (wl.isHeld) wl.release() }
