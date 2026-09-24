@@ -57,6 +57,15 @@ Grab `Qanvas-v*-arm64.apk` from [Releases](../../releases), or build:
   foreground service discipline.
 - Product & growth docs: [docs/PRD.md](docs/PRD.md) · [docs/GROWTH.md](docs/GROWTH.md)
 
+## Signing certificate
+
+Release builds are signed with a dedicated Qanvas key (`CN=Qanvas, O=Samge`):
+
+- SHA-1: `68:45:A8:27:E9:80:CA:D8:1C:18:E6:91:53:05:F6:9D:30:C1:2E:52`
+- SHA-256: `80:97:78:A8:C0:58:9C:C4:06:B2:D5:75:8A:84:91:9C:5D:EA:3A:60:3B:3C:8E:A8:95:F1:D5:1D:78:6A:DE:7F`
+
+Bind these fingerprints when registering for API products that require app-signature verification.
+
 ## License
 
 - App code: Apache-2.0
