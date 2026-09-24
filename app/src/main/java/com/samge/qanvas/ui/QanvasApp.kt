@@ -139,6 +139,10 @@ fun QanvasRoot(vm: MainViewModel) {
             "__lang__" -> snackbar.showSnackbar(ctx.getString(R.string.toast_lang_set))
             "__inspo_applied__" -> snackbar.showSnackbar(ctx.getString(R.string.inspo_applied))
             "__edit_loaded__" -> snackbar.showSnackbar(ctx.getString(R.string.edit_loaded))
+            "__busy__" -> snackbar.showSnackbar(ctx.getString(R.string.busy_block_hint))
+            "__cancelled__" -> snackbar.showSnackbar(ctx.getString(R.string.job_cancelled))
+            "__saved_ok__" -> snackbar.showSnackbar(ctx.getString(R.string.toast_saved_ok))
+            "__save_failed__" -> snackbar.showSnackbar(ctx.getString(R.string.toast_save_failed))
         }
         if (toastMsg != null) vm.toastShown()
     }
@@ -209,27 +213,40 @@ fun QanvasRoot(vm: MainViewModel) {
         snackbarHost = { SnackbarHost(snackbar) },
     ) { pad ->
         Column(Modifier.padding(pad).fillMaxSize()) {
-            // scrollable single-line tab bar
-            @OptIn(ExperimentalMaterial3Api::class)
-            androidx.compose.material3.SecondaryScrollableTabRow(
-                selectedTabIndex = tab,
-                edgePadding = 8.dp,
-            ) {
-                TAB_KEYS.forEachIndexed { i, res ->
-                    Tab(
-                        selected = tab == i,
-                        onClick = { tab = i },
-                        text = {
-                            Text(
-                                stringResource(res),
-                                style = MaterialTheme.typography.labelMedium,
-                                maxLines = 1,
-                                softWrap = false,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            )
-                        },
-                    )
+            // scrollable single-line tab bar with edge fade hinting more tabs
+            Box {
+                @OptIn(ExperimentalMaterial3Api::class)
+                androidx.compose.material3.SecondaryScrollableTabRow(
+                    selectedTabIndex = tab,
+                    edgePadding = 8.dp,
+                ) {
+                    TAB_KEYS.forEachIndexed { i, res ->
+                        Tab(
+                            selected = tab == i,
+                            onClick = { tab = i },
+                            text = {
+                                Text(
+                                    stringResource(res),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                )
+                            },
+                        )
+                    }
                 }
+                // left/right fade strips: visual hint that the bar scrolls
+                if (tab > 0) Box(
+                    Modifier.align(Alignment.CenterStart).width(14.dp).height(36.dp)
+                        .background(androidx.compose.ui.graphics.Brush.horizontalGradient(
+                            listOf(MaterialTheme.colorScheme.surfaceVariant, Color.Transparent)))
+                )
+                if (tab < TAB_KEYS.size - 1) Box(
+                    Modifier.align(Alignment.CenterEnd).width(14.dp).height(36.dp)
+                        .background(androidx.compose.ui.graphics.Brush.horizontalGradient(
+                            listOf(Color.Transparent, MaterialTheme.colorScheme.surfaceVariant)))
+                )
             }
             when (tab) {
                 0 -> if (gate.modelPresent) CreateTab(vm, gen) else MissingModelGate(vm)
@@ -365,7 +382,7 @@ fun StepsSeedRow(vm: MainViewModel, hint: String) {
 }
 
 @Composable
-fun ProgressCard(gen: GenBus.State, estimateSec: Int) {
+fun ProgressCard(gen: GenBus.State, estimateSec: Int, onCancel: (() -> Unit)? = null) {
     val stageText = when (gen.stageKey.ifEmpty { gen.stage }) {
         "load" -> stringResource(R.string.notif_stage_load)
         "te" -> stringResource(R.string.notif_stage_te)
@@ -386,6 +403,25 @@ fun ProgressCard(gen: GenBus.State, estimateSec: Int) {
                 Text(stageText, style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.weight(1f))
                 Text("${gen.progress}%", style = MaterialTheme.typography.titleMedium, color = AppleTokens.ActionBlue)
+                if (onCancel != null) {
+                    var confirm by remember { mutableStateOf(false) }
+                    TextButton(onClick = { confirm = true }) { Text(stringResource(R.string.cancel_job)) }
+                    if (confirm) {
+                        AlertDialog(
+                            onDismissRequest = { confirm = false },
+                            title = { Text(stringResource(R.string.cancel_confirm_title)) },
+                            text = { Text(stringResource(R.string.cancel_confirm_body)) },
+                            confirmButton = {
+                                TextButton(onClick = { confirm = false; onCancel() }) {
+                                    Text(stringResource(R.string.cancel_job), color = AppleTokens.Red)
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { confirm = false }) { Text(stringResource(R.string.cancel)) }
+                            },
+                        )
+                    }
+                }
             }
             LinearProgressIndicator(
                 progress = { gen.progress / 100f },
@@ -547,7 +583,7 @@ fun CreateTab(vm: MainViewModel, gen: GenBus.State) {
         if (GenServiceRunning(gen)) {
             item {
                 val size = QwenImage21SizeProxy.of(ratio, tier)
-                ProgressCard(gen, GenEngine.estimateSeconds(size.tokens(), steps))
+                ProgressCard(gen, GenEngine.estimateSeconds(size.tokens(), steps), onCancel = { GenService.requestCancel() })
             }
         }
         if (gen.kind == GenBus.Kind.OOM) item { OomCard() }
@@ -617,7 +653,7 @@ fun StickerTab(vm: MainViewModel, gen: GenBus.State) {
         if (GenServiceRunning(gen)) {
             item {
                 val size = QwenImage21SizeProxy.of(ratio, tier)
-                ProgressCard(gen, GenEngine.estimateSeconds(size.tokens(), steps))
+                ProgressCard(gen, GenEngine.estimateSeconds(size.tokens(), steps), onCancel = { GenService.requestCancel() })
             }
         }
         if (gen.kind == GenBus.Kind.OOM) item { OomCard() }
@@ -731,7 +767,7 @@ fun EditTab(vm: MainViewModel, gen: GenBus.State) {
             ) { vm.startGeneration(prompt, "edit", editInput) }
         }
         if (GenServiceRunning(gen)) {
-            item { ProgressCard(gen, GenEngine.estimateSeconds(800, steps)) }
+            item { ProgressCard(gen, GenEngine.estimateSeconds(800, steps), onCancel = { GenService.requestCancel() }) }
         }
         if (gen.kind == GenBus.Kind.OOM) item { OomCard() }
         if (gen.kind == GenBus.Kind.ERROR) item { ErrorCard(gen.error ?: "unknown") }
@@ -845,6 +881,7 @@ fun modeLabel(mode: String): String = when (mode) {
 }
 
 /** Full detail dialog: image + all params + timing breakdown + share/edit actions. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun RecordDetailDialog(vm: MainViewModel, rec: GenRecord, onClose: () -> Unit) {
     var zoom by remember { mutableStateOf(false) }
@@ -892,7 +929,11 @@ fun RecordDetailDialog(vm: MainViewModel, rec: GenRecord, onClose: () -> Unit) {
                 DetailRow(stringResource(R.string.d_end), if (rec.endAt > 0) fmt.format(Date(rec.endAt)) else "—")
                 DetailRow(stringResource(R.string.d_total), stringResource(R.string.sec_fmt, rec.durationMs / 1000.0), bold = true)
                 Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // FlowRow: wraps instead of squeezing labels on narrow screens
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
                     Button(
                         onClick = {
                             val send = Intent(android.content.Intent.ACTION_SEND).apply {
@@ -902,26 +943,53 @@ fun RecordDetailDialog(vm: MainViewModel, rec: GenRecord, onClose: () -> Unit) {
                             ctx.startActivity(Intent.createChooser(send, ctx.getString(R.string.share_title)))
                         },
                         shape = RoundedCornerShape(999.dp),
-                        modifier = Modifier.weight(1f),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     ) {
-                        Icon(Icons.Filled.Share, null, Modifier.size(16.dp))
+                        Icon(Icons.Filled.Share, null, Modifier.size(15.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.d_share))
+                        Text(stringResource(R.string.d_share), fontSize = 13.sp, maxLines = 1)
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            // save a copy into the system gallery via MediaStore
+                            val ok = runCatching {
+                                val values = android.content.ContentValues().apply {
+                                    put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, "qanvas_" + System.currentTimeMillis() + ".png")
+                                    put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png")
+                                    put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, android.os.Environment.DIRECTORY_PICTURES + "/Qanvas")
+                                }
+                                val uri = ctx.contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                                    ?: return@runCatching false
+                                ctx.contentResolver.openOutputStream(uri)!!.use { out ->
+                                    File(rec.outPath).inputStream().use { it.copyTo(out) }
+                                }
+                                true
+                            }.getOrDefault(false)
+                            vm.toast(if (ok) "__saved_ok__" else "__save_failed__")
+                        },
+                        enabled = File(rec.outPath).isFile,
+                        shape = RoundedCornerShape(999.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    ) {
+                        Icon(Icons.Outlined.PhotoLibrary, null, Modifier.size(15.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.save_image), fontSize = 13.sp, maxLines = 1)
                     }
                     OutlinedButton(
                         onClick = { vm.sendToEdit(rec); onClose() },
                         enabled = File(rec.outPath).isFile,
                         shape = RoundedCornerShape(999.dp),
-                        modifier = Modifier.weight(1f),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     ) {
-                        Icon(Icons.Filled.Edit, null, Modifier.size(16.dp))
+                        Icon(Icons.Filled.Edit, null, Modifier.size(15.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.d_edit_img))
+                        Text(stringResource(R.string.d_edit_img), fontSize = 13.sp, maxLines = 1)
                     }
                     OutlinedButton(
                         onClick = { vm.reusePrompt(rec); onClose() },
                         shape = RoundedCornerShape(999.dp),
-                    ) { Text(stringResource(R.string.d_reuse)) }
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    ) { Text(stringResource(R.string.d_reuse), fontSize = 13.sp, maxLines = 1) }
                 }
             }
         }
@@ -1107,7 +1175,7 @@ fun MissingModelGate(vm: MainViewModel) {
             ) {
                 Icon(Icons.Filled.AutoAwesome, null, Modifier.size(16.dp))
                 Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.set_download_btn), fontWeight = FontWeight.Medium, fontSize = 15.sp)
+                Text(stringResource(R.string.set_download_btn), fontWeight = FontWeight.Medium, fontSize = 14.sp)
             }
         }
         item { Spacer(Modifier.height(30.dp)) }
@@ -1162,11 +1230,11 @@ fun GenerateButton(enabled: Boolean, running: Boolean, modelReady: Boolean, onCl
         if (running) {
             CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
             Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.btn_generate_running), fontWeight = FontWeight.Medium, fontSize = 15.sp)
+            Text(stringResource(R.string.btn_generate_running), fontWeight = FontWeight.Medium, fontSize = 14.sp)
         } else {
             Icon(Icons.Filled.AutoAwesome, null, Modifier.size(16.dp))
             Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.btn_generate), fontWeight = FontWeight.Medium, fontSize = 15.sp)
+            Text(stringResource(R.string.btn_generate), fontWeight = FontWeight.Medium, fontSize = 14.sp)
         }
     }
 }

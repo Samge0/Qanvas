@@ -188,6 +188,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Apply a clipboard card: set params + prompt, jump to the right tab. */
     fun applyClipCard(rec: GenRecord) {
+        if (busyBlocked()) { _clipCard.value = null; return }
         rec.ratio.takeIf { it in 0..6 }?.let { ratioOrdinal.value = it }
         rec.tier.takeIf { it in 0..2 }?.let { tierOrdinal.value = it }
         rec.steps.takeIf { it in 1..50 }?.let { steps.value = it }
@@ -197,8 +198,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _events.value = UiEvent.GoTab(if (rec.mode == "edit") 2 else 0)
     }
 
+    private fun busyBlocked(): Boolean {
+        if (GenService.running) {
+            _toast.value = "__busy__"
+            return true
+        }
+        return false
+    }
+
     /** Inspo card tap → fill prompt, jump to Create (or Sticker for sticker cards). */
     fun applyInspo(card: com.samge.qanvas.core.Inspo.Card) {
+        if (busyBlocked()) return
         val zh = com.samge.qanvas.core.Inspo.isZh()
         _prefillPrompt.value = card.promptFor(zh)
         _events.value = UiEvent.GoTab(if (card.kind == com.samge.qanvas.core.Inspo.Kind.STICKER) 1 else 0)
@@ -206,12 +216,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Gallery detail: reuse prompt in Create. */
     fun reusePrompt(rec: GenRecord) {
+        if (busyBlocked()) return
         _prefillPrompt.value = rec.prompt
         _events.value = UiEvent.GoTab(0)
     }
 
     /** Gallery detail: send output image to Edit tab. */
     fun sendToEdit(rec: GenRecord) {
+        if (busyBlocked()) return
         _editFromRecord.value = rec
         _events.value = UiEvent.GoTab(2)
     }

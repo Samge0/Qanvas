@@ -182,6 +182,17 @@
     <string name="set_keep_enable">Keep model in memory (hot reload)</string>
     <string name="set_keep_desc">Skips the ~20–30 s model load on every generation. Costs ~4–6 GB of reserved RAM while enabled; free it anytime by turning this off.</string>
 
+    <!-- v1.1.3 additions -->
+    <string name="cancel_job">Cancel</string>
+    <string name="cancel_confirm_title">Cancel current generation?</string>
+    <string name="cancel_confirm_body">The partial image will be discarded. Progress so far cannot be resumed.</string>
+    <string name="job_cancelled">Generation cancelled</string>
+    <string name="save_image">Save</string>
+    <string name="toast_saved_ok">Saved to your gallery</string>
+    <string name="toast_save_failed">Could not save the image</string>
+    <string name="save_pick_title">Save image</string>
+    <string name="busy_block_hint">A generation is running — wait or cancel it first</string>
+
     <!-- notifications (service) -->
     <string name="notif_title">Qanvas</string>
     <string name="notif_downloading">Downloading model</string>

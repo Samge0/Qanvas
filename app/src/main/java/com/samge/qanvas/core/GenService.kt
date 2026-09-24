@@ -56,6 +56,15 @@ class GenService : Service() {
         const val X_INPUT = "input"
         const val X_OUT = "out"
 
+        /** Cooperative cancellation flag for the running generation. */
+        @Volatile
+        var cancelRequested: Boolean = false
+            private set
+
+        fun requestCancel() {
+            cancelRequested = true
+        }
+
         @Volatile
         var running: Boolean = false
             private set
@@ -120,6 +129,7 @@ class GenService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        setForegroundServicePriority()
         notifMgr = getSystemService(NotificationManager::class.java)
         listOf(CH_GEN to getString(R.string.notif_channel_gen), CH_DL to getString(R.string.notif_channel_dl)).forEach { (id, name) ->
             notifMgr.createNotificationChannel(
@@ -149,10 +159,19 @@ class GenService : Service() {
             }
             ACTION_GENERATE -> {
                 val out = intent.getStringExtra(X_OUT) ?: return START_NOT_STICKY
-                startForeground(
-                    NOTIF_GEN,
-                    notif(CH_GEN, getString(R.string.notif_generating), getString(R.string.notif_preparing), 0, true, NOTIF_REQ_GEN),
-                )
+                // immediate foreground promotion: visible notification + boosted oom_adj
+                if (android.os.Build.VERSION.SDK_INT >= 31) {
+                    startForeground(
+                        NOTIF_GEN,
+                        notif(CH_GEN, getString(R.string.notif_generating), getString(R.string.notif_preparing), 0, true, NOTIF_REQ_GEN),
+                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+                    )
+                } else {
+                    startForeground(
+                        NOTIF_GEN,
+                        notif(CH_GEN, getString(R.string.notif_generating), getString(R.string.notif_preparing), 0, true, NOTIF_REQ_GEN),
+                    )
+                }
                 runGeneration(
                     prompt = intent.getStringExtra(X_PROMPT) ?: "",
                     mode = intent.getStringExtra(X_MODE) ?: "t2i",
@@ -223,10 +242,19 @@ class GenService : Service() {
             return
         }
         running = true
+        cancelRequested = false
+        // Partial wakelock with a generous timeout: guarantees the OpenCL denoising
+        // loop keeps running when the user switches to another app. Without this,
+        // OEM power managers throttle background GPU/CPU work within seconds.
+        val wl = androidx.core.content.ContextCompat.getSystemService(
+            this, android.os.PowerManager::class.java
+        )!!.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "qanvas:gen")
+        wl.acquire(15 * 60 * 1000L)
         job = scope.launch {
             var doneFile: File? = null
             var error: String? = null
             var oom = false
+            var cancelledByUser = false
             var width = 0
             var height = 0
             val startAt = System.currentTimeMillis()
@@ -263,6 +291,9 @@ class GenService : Service() {
 
                 try {
                     val listener = QwenImage21.ProgressListener { p ->
+                        if (cancelRequested) {
+                            throw QwenImage21Exception(QwenImage21Exception.RUNTIME_ERROR, "cancelled by user")
+                        }
                         if (firstDenoiseAt[0] == 0L && p > 10) {
                             firstDenoiseAt[0] = android.os.SystemClock.elapsedRealtime()
                         }
@@ -293,8 +324,12 @@ class GenService : Service() {
                     }
                 }
             } catch (e: QwenImage21Exception) {
-                oom = e.isOutOfMemory
-                error = e.message
+                if (cancelRequested) {
+                    cancelledByUser = true
+                } else {
+                    oom = e.isOutOfMemory
+                    error = e.message
+                }
                 releaseHot()
             } catch (e: Exception) {
                 error = e.message ?: e.javaClass.simpleName
@@ -308,6 +343,8 @@ class GenService : Service() {
                 val dur = endMs - perf
                 if (doneFile != null) {
                     GenBus.post(GenBus.State(GenBus.Kind.DONE, 100, "done", doneFile = doneFile!!.absolutePath))
+                } else if (cancelledByUser) {
+                    GenBus.post(GenBus.State(GenBus.Kind.ERROR, error = "__cancelled__"))
                 } else {
                     GenBus.post(
                         GenBus.State(if (oom) GenBus.Kind.OOM else GenBus.Kind.ERROR, error = error ?: "unknown")
@@ -329,9 +366,18 @@ class GenService : Service() {
                 } catch (_: Exception) {
                 }
                 running = false
+                runCatching { if (wl.isHeld) wl.release() }
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
+        }
+    }
+
+    /** Boost this thread to top-of-UI priority so the scheduler favors denoising. */
+    private fun setForegroundServicePriority() {
+        try {
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY)
+        } catch (_: Exception) {
         }
     }
 
