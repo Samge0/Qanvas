@@ -2,6 +2,12 @@
 
 **Qwen-Image-2.1 (7B) text-to-image, photo editing and RGBA stickers — 100% on-device, 100% private.**
 
+[![Release](https://img.shields.io/github/v/release/Samge0/Qanvas?label=Release)](../../releases)
+[![License](https://img.shields.io/badge/code-Apache--2.0-blue)](LICENSE)
+[![Model](https://img.shields.io/badge/model-Qwen--Image--2.1--MNN-6C5CE7)](https://huggingface.co/evankuo/Qwen-Image-2.1-MNN)
+
+> ⬇️ **Download**: [`Qanvas-v1.0.0-arm64.apk`](../../releases) (20 MB app · one-time 10.3 GB model download in-app)
+
 No cloud. No account. No upload. Your photos never leave the phone.
 
 Built on [evankuo/Qwen-Image-2.1-MNN](https://huggingface.co/evankuo/Qwen-Image-2.1-MNN) + the
