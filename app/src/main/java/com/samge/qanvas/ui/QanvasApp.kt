@@ -28,7 +28,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.items as staggeredItems
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -851,26 +854,17 @@ fun GalleryTab(vm: MainViewModel, onOpen: (GenRecord) -> Unit) {
     val datePattern = stringResource(R.string.date_fmt)
     val fmt = remember(datePattern) { SimpleDateFormat(datePattern, Locale.getDefault()) }
 
-    // Xiaohongshu-style staggered feed: 2 columns, image height follows its
-    // aspect ratio (clamped), meta strip under each card, soft rounded cards.
-    val cols = 2
-    val chunks = remember(history) {
-        List(cols) { c -> history.filterIndexed { i, _ -> i % cols == c } }
-    }
-    Row(
-        Modifier.fillMaxSize().padding(horizontal = 14.dp),
+    // True Xiaohongshu waterfall: ONE scroll container (LazyVerticalStaggeredGrid),
+    // 2 columns, cards keep their own aspect ratio so the columns stagger naturally.
+    androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid(
+        columns = androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells.Fixed(2),
+        modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 12.dp, bottom = 32.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalItemSpacing = 12.dp,
     ) {
-        chunks.forEach { column ->
-            Column(
-                Modifier.weight(1f).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                column.forEach { rec ->
-                    WaterfallCard(rec, fmt, onOpen)
-                }
-                Spacer(Modifier.height(24.dp))
-            }
+        staggeredItems(history, key = { it.id }) { rec ->
+            WaterfallCard(rec, fmt, onOpen)
         }
     }
 
@@ -1184,7 +1178,7 @@ fun InspoTab(vm: MainViewModel) {
                     Text(groupTitles[gi], style = MaterialTheme.typography.titleMedium)
                 }
             }
-            items(Inspo.byKind(kind)) { card ->
+            gridItems(Inspo.byKind(kind)) { card ->
                 Card(
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
