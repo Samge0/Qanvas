@@ -21,6 +21,7 @@ object GenEngine {
     const val KEY_PROXY_ENABLED = "proxy_enabled"
     const val KEY_PROXY_HOST = "proxy_host"
     const val KEY_PROXY_PORT = "proxy_port"
+    const val KEY_KEEP_LOADED = "keep_models_loaded"
 
     fun prefs(context: Context) =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

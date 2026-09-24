@@ -145,6 +145,43 @@
     <string name="reset_dir_confirm">恢复为默认应用目录？自定义目录中的文件将保留在原处。</string>
     <string name="dir_pick_storage_fmt">存储 %1$d</string>
 
+    <!-- v1.1.2 additions: gallery detail -->
+    <string name="detail_title">作品详情</string>
+    <string name="d_prompt">提示词</string>
+    <string name="d_mode">模式</string>
+    <string name="d_size">尺寸</string>
+    <string name="d_steps">步数</string>
+    <string name="d_seed">种子</string>
+    <string name="d_start">开始时间</string>
+    <string name="d_model_load">模型加载</string>
+    <string name="d_gen">生成过程</string>
+    <string name="d_end">结束时间</string>
+    <string name="d_total">总耗时</string>
+    <string name="d_share">分享</string>
+    <string name="d_edit_img">送去改图</string>
+    <string name="d_reuse">复用提示词</string>
+    <string name="close">关闭</string>
+    <string name="sec_fmt">%1$s 秒</string>
+    <string name="date_fmt">MM/dd HH:mm:ss</string>
+    <string name="mode_t2i">文生图</string>
+    <string name="mode_edit">改图</string>
+    <string name="mode_sticker">贴纸</string>
+    <string name="tap_zoom_hint">点图放大 · 双指缩放 · 再点关闭</string>
+
+    <!-- share / clipboard -->
+    <string name="share_title">分享作品</string>
+    <string name="clip_title">检测到 Qanvas 分享卡</string>
+    <string name="clip_body_fmt">要在画廊中复现这个作品吗？\n\n%1$s</string>
+    <string name="clip_apply">一键复现</string>
+    <string name="clip_ignore">忽略</string>
+    <string name="inspo_applied">提示词已填入——可以生成了</string>
+    <string name="edit_loaded">图片已载入改图页</string>
+
+    <!-- hot load -->
+    <string name="set_keep_title">性能</string>
+    <string name="set_keep_enable">模型常驻内存（热加载）</string>
+    <string name="set_keep_desc">跳过每次生成约 20–30 秒的模型加载。开启期间常驻占用约 4–6 GB 内存，随时关闭即可释放。</string>
+
     <!-- notifications (service) -->
     <string name="notif_title">Qanvas</string>
     <string name="notif_downloading">正在下载模型</string>

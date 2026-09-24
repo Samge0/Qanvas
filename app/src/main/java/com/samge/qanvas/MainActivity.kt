@@ -1,6 +1,7 @@
 package com.samge.qanvas
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -8,9 +9,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
-import androidx.core.os.LocaleListCompat
 import androidx.lifecycle.ViewModelProvider
 import com.samge.qanvas.ui.MainViewModel
 import com.samge.qanvas.ui.QanvasRoot
@@ -32,11 +31,30 @@ class MainActivity : AppCompatActivity() {
         }
         vm.refreshGate()
         vm.collectResult()
+        handleNavExtra(intent)
         setContent {
             com.samge.qanvas.ui.theme.QanvasTheme {
                 QanvasRoot(vm)
             }
         }
+    }
+
+    /** Notification tap → jump straight to the relevant tab. */
+    private fun handleNavExtra(intent: Intent?) {
+        // routed through QanvasRoot via a saved-state style hook; simple approach:
+        intent?.getIntExtra("open_tab", -1)?.let { tab ->
+            if (tab >= 0) openTabRequest = tab
+        }
+    }
+
+    companion object {
+        /** last requested tab from a notification tap, consumed by QanvasRoot. */
+        @Volatile var openTabRequest: Int = -1
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleNavExtra(intent)
     }
 
     override fun onResume() {

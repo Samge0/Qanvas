@@ -332,6 +332,29 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
             }
         }
 
+        // ---------------- performance (hot reload) ----------------
+        SettingsCard(title = stringResource(R.string.set_keep_title)) {
+            var keep by remember { mutableStateOf(prefs.getBoolean(GenEngine.KEY_KEEP_LOADED, false)) }
+            Text(
+                stringResource(R.string.set_keep_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.set_keep_enable), style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.weight(1f))
+                Switch(
+                    checked = keep,
+                    onCheckedChange = {
+                        keep = it
+                        prefs.edit().putBoolean(GenEngine.KEY_KEEP_LOADED, it).apply()
+                        if (!it) GenService.releaseHot()
+                        vm.toast("__saved__")
+                    },
+                )
+            }
+        }
+
         // ---------------- danger ----------------
         SettingsCard(title = stringResource(R.string.set_danger_title)) {
             OutlinedButton(
@@ -348,7 +371,7 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
         // ---------------- about ----------------
         SettingsCard(title = stringResource(R.string.set_about_title)) {
             Text(
-                stringResource(R.string.set_about_body, "1.1.1"),
+                stringResource(R.string.set_about_body, "1.1.2"),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

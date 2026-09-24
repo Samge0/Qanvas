@@ -28,8 +28,9 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Foreground service that keeps one generation (up to ~8 min) or one model download alive.
- * The blocking QwenImage21 calls run on Dispatchers.Default; progress is published to [GenBus].
+ * Foreground service for generation (up to ~8 min) and model download.
+ * Timing breakdown: [startAt] → model load → [genMs] (first denoise → done) → [endAt].
+ * Optional hot reload keeps the QwenImage21 instance alive between jobs (Settings toggle).
  */
 class GenService : Service() {
 
@@ -38,24 +39,40 @@ class GenService : Service() {
         const val CH_DL = "qanvas_download"
         const val NOTIF_GEN = 41
         const val NOTIF_DL = 42
+        const val NOTIF_REQ_GEN = 1041
+        const val NOTIF_REQ_DL = 1042
 
         const val ACTION_GENERATE = "com.samge.qanvas.GENERATE"
         const val ACTION_DOWNLOAD = "com.samge.qanvas.DOWNLOAD"
         const val ACTION_STOP = "com.samge.qanvas.STOP"
+        const val ACTION_RELEASE = "com.samge.qanvas.RELEASE"
 
         const val X_PROMPT = "prompt"
-        const val X_MODE = "mode"        // t2i | edit | sticker
-        const val X_RATIO = "ratio"      // QwenImage21.Size.Ratio ordinal
-        const val X_TIER = "tier"        // QwenImage21.Size.Tier ordinal
+        const val X_MODE = "mode"
+        const val X_RATIO = "ratio"
+        const val X_TIER = "tier"
         const val X_STEPS = "steps"
         const val X_SEED = "seed"
-        const val X_INPUT = "input"      // input image path (edit mode)
+        const val X_INPUT = "input"
         const val X_OUT = "out"
 
-        /** Live flag for UI gating. */
         @Volatile
         var running: Boolean = false
             private set
+
+        /** Hot-reload singleton: reused across jobs when keepModelsLoaded is on. */
+        @Volatile
+        private var hotInstance: QwenImage21? = null
+        private val hotLock = Any()
+
+        fun releaseHot() {
+            synchronized(hotLock) {
+                hotInstance?.let { runCatching { it.close() } }
+                hotInstance = null
+            }
+        }
+
+        fun hotActive(): Boolean = hotInstance != null
 
         fun startGeneration(
             context: Context, prompt: String, mode: String,
@@ -104,7 +121,7 @@ class GenService : Service() {
     override fun onCreate() {
         super.onCreate()
         notifMgr = getSystemService(NotificationManager::class.java)
-        listOf(CH_GEN to "Generation", CH_DL to "Model download").forEach { (id, name) ->
+        listOf(CH_GEN to getString(R.string.notif_channel_gen), CH_DL to getString(R.string.notif_channel_dl)).forEach { (id, name) ->
             notifMgr.createNotificationChannel(
                 NotificationChannel(id, name, NotificationManager.IMPORTANCE_LOW).apply {
                     setShowBadge(false)
@@ -121,14 +138,21 @@ class GenService : Service() {
                 job?.cancel()
                 stopSelf()
             }
+            ACTION_RELEASE -> {
+                releaseHot()
+                stopSelf()
+            }
             ACTION_DOWNLOAD -> {
-                startForeground(NOTIF_DL, notif(CH_DL, getString(R.string.notif_downloading), "", 0, true))
+                startForeground(NOTIF_DL, notif(CH_DL, getString(R.string.notif_downloading), "", 0, true, NOTIF_REQ_DL))
                 GenBus.post(GenBus.State(GenBus.Kind.DOWNLOADING, 0, detail = "…"))
                 runDownload()
             }
             ACTION_GENERATE -> {
                 val out = intent.getStringExtra(X_OUT) ?: return START_NOT_STICKY
-                startForeground(NOTIF_GEN, notif(CH_GEN, "Preparing", "", 0, true))
+                startForeground(
+                    NOTIF_GEN,
+                    notif(CH_GEN, getString(R.string.notif_generating), getString(R.string.notif_preparing), 0, true, NOTIF_REQ_GEN),
+                )
                 runGeneration(
                     prompt = intent.getStringExtra(X_PROMPT) ?: "",
                     mode = intent.getStringExtra(X_MODE) ?: "t2i",
@@ -156,7 +180,6 @@ class GenService : Service() {
         running = true
         job = scope.launch {
             try {
-                // user-configurable HTTP proxy (Settings), default = system resolver
                 val proxy = GenEngine.proxy(this@GenService)
                 if (proxy != null) {
                     System.setProperty("proxyHost", proxy.first)
@@ -166,13 +189,11 @@ class GenService : Service() {
                 }
                 val d = ModelDownloader()
                 downloader = d
-                // metadata (HEAD requests for 20 files) can take seconds — show a
-                // "preparing" state immediately so the UI isn't dead.
                 GenBus.post(GenBus.State(GenBus.Kind.DOWNLOADING, 0, detail = "__preparing__"))
                 d.download(GenEngine.modelDir(this@GenService)) { file, done, total ->
                     val pct = (100L * done / total.coerceAtLeast(1L)).toInt()
                     val detail = String.format("%.2f/%.2f GB", done / 1e9, total / 1e9)
-                    notifyProgress(NOTIF_DL, CH_DL, file, detail, pct)
+                    notifyProgress(NOTIF_DL, CH_DL, "dl", detail, pct)
                     GenBus.post(GenBus.State(GenBus.Kind.DOWNLOADING, pct, file, detail = detail))
                 }
                 GenBus.post(GenBus.State(GenBus.Kind.DL_OK))
@@ -208,31 +229,52 @@ class GenService : Service() {
             var oom = false
             var width = 0
             var height = 0
-            val start = android.os.SystemClock.elapsedRealtime()
+            val startAt = System.currentTimeMillis()
+            val perf = android.os.SystemClock.elapsedRealtime()
+            var modelLoadEnd = perf
+            val firstDenoiseAt = longArrayOf(0L)
             try {
                 val size = QwenImage21SizeProxy.of(ratioOrd, tierOrd)
                 width = size.width
                 height = size.height
+                val keepLoaded = GenEngine.prefs(this@GenService)
+                    .getBoolean(GenEngine.KEY_KEEP_LOADED, false)
                 val opts = QwenImage21.Options().apply {
                     useGpu = true
                     textEncoderOnCpu = true
                     vaeOnCpu = true
-                    keepModelsLoaded = false
+                    keepModelsLoaded = keepLoaded
                     threads = 4
                     crashMarkerFile = File(filesDir, "generation_in_progress.txt")
                 }
                 GenBus.post(GenBus.State(GenBus.Kind.LOADING, stage = "load"))
-                QwenImage21(GenEngine.modelDir(this@GenService), opts).use { qi ->
-                val listener = QwenImage21.ProgressListener { p ->
-                    notifyProgress(NOTIF_GEN, CH_GEN, GenEngine.stageKind(p), "$p%", p)
-                    GenBus.post(
-                        GenBus.State(
-                            GenBus.Kind.GENERATING, p,
-                            stageKey = GenEngine.stageKind(p),
-                            stageStep = ((p - 10).coerceAtLeast(0) / 75.0 * steps).toInt().coerceAtMost(steps),
-                        )
-                    )
+
+                // hot path: reuse the loaded instance; cold path: create (and keep or close)
+                val qi: QwenImage21 = synchronized(hotLock) {
+                    val existing = hotInstance
+                    if (keepLoaded && existing != null) existing
+                    else {
+                        val created = QwenImage21(GenEngine.modelDir(this@GenService), opts)
+                        if (keepLoaded) hotInstance = created
+                        created
+                    }
                 }
+                modelLoadEnd = android.os.SystemClock.elapsedRealtime()
+
+                try {
+                    val listener = QwenImage21.ProgressListener { p ->
+                        if (firstDenoiseAt[0] == 0L && p > 10) {
+                            firstDenoiseAt[0] = android.os.SystemClock.elapsedRealtime()
+                        }
+                        notifyProgress(NOTIF_GEN, CH_GEN, GenEngine.stageKind(p), "$p%", p)
+                        GenBus.post(
+                            GenBus.State(
+                                GenBus.Kind.GENERATING, p,
+                                stageKey = GenEngine.stageKind(p),
+                                stageStep = ((p - 10).coerceAtLeast(0) / 75.0 * steps).toInt().coerceAtMost(steps),
+                            )
+                        )
+                    }
                     when (mode) {
                         "edit" -> {
                             val tiers = QwenImage21SizeProxy.TIERS
@@ -245,16 +287,27 @@ class GenService : Service() {
                         else -> qi.generate(prompt, size, steps, seed.toInt(), out, listener)
                     }
                     doneFile = out
+                } finally {
+                    if (!keepLoaded) {
+                        runCatching { qi.close() }
+                    }
                 }
             } catch (e: QwenImage21Exception) {
                 oom = e.isOutOfMemory
                 error = e.message
+                releaseHot()
             } catch (e: Exception) {
                 error = e.message ?: e.javaClass.simpleName
+                releaseHot()
             } finally {
-                val dur = android.os.SystemClock.elapsedRealtime() - start
+                val endMs = android.os.SystemClock.elapsedRealtime()
+                val endAt = System.currentTimeMillis()
+                val genStart = if (firstDenoiseAt[0] > 0) firstDenoiseAt[0] else modelLoadEnd
+                val loadMs = genStart - perf
+                val genMs = endMs - genStart
+                val dur = endMs - perf
                 if (doneFile != null) {
-                    GenBus.post(GenBus.State(GenBus.Kind.DONE, 100, "Done", doneFile = doneFile!!.absolutePath))
+                    GenBus.post(GenBus.State(GenBus.Kind.DONE, 100, "done", doneFile = doneFile!!.absolutePath))
                 } else {
                     GenBus.post(
                         GenBus.State(if (oom) GenBus.Kind.OOM else GenBus.Kind.ERROR, error = error ?: "unknown")
@@ -268,6 +321,8 @@ class GenService : Service() {
                                 prompt = prompt, mode = mode, width = width, height = height,
                                 steps = steps, seed = seed, outPath = out.absolutePath,
                                 inPath = inputPath, durationMs = dur,
+                                startAt = startAt, modelLoadMs = loadMs, genMs = genMs,
+                                endAt = endAt, ratio = 0, tier = 0,
                             )
                         )
                     }
@@ -282,13 +337,18 @@ class GenService : Service() {
 
     // ---------------------------------------------------------------- notifications
 
-    private fun notif(channel: String, text: String, sub: String, pct: Int, indeterminate: Boolean): Notification {
-        val pi = PendingIntent.getActivity(
-            this, 0,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-        return NotificationCompat.Builder(this, channel)
+    /** Notification tap → open the app (routes to the relevant tab via extras). */
+    private fun contentIntent(req: Int): PendingIntent = PendingIntent.getActivity(
+        this, req,
+        Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("open_tab", if (req == NOTIF_REQ_DL) 5 else 0)
+        },
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+
+    private fun notif(channel: String, text: String, sub: String, pct: Int, indeterminate: Boolean, req: Int): Notification =
+        NotificationCompat.Builder(this, channel)
             .setSmallIcon(android.R.drawable.ic_menu_gallery)
             .setContentTitle(getString(R.string.notif_title))
             .setContentText(text)
@@ -296,10 +356,9 @@ class GenService : Service() {
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
-            .setContentIntent(pi)
+            .setContentIntent(contentIntent(req))
             .setProgress(100, pct, indeterminate)
             .build()
-    }
 
     private fun notifyProgress(id: Int, channel: String, stageKey: String, sub: String, pct: Int) {
         val text = when (stageKey) {
@@ -319,6 +378,7 @@ class GenService : Service() {
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
                 .setSilent(true)
+                .setContentIntent(contentIntent(if (id == NOTIF_DL) NOTIF_REQ_DL else NOTIF_REQ_GEN))
                 .setProgress(100, pct, false)
                 .build(),
         )

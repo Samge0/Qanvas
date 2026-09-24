@@ -1,9 +1,12 @@
 package com.samge.qanvas.ui
 
+import android.content.Intent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,9 +14,12 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -23,17 +29,21 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.PhotoLibrary
@@ -52,10 +62,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -63,6 +73,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -74,7 +85,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -83,14 +96,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.samge.qanvas.R
 import com.samge.qanvas.core.GenBus
 import com.samge.qanvas.core.GenEngine
-import com.samge.qanvas.core.GenService
 import com.samge.qanvas.core.Inspo
 import com.samge.qanvas.core.QwenImage21SizeProxy
+import com.samge.qanvas.core.GenService
+import com.samge.qanvas.core.ShareCard
 import com.samge.qanvas.data.GenRecord
 import com.samge.qanvas.ui.theme.AppleTokens
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -99,15 +115,18 @@ private val TAB_KEYS = listOf(R.string.tab_create, R.string.tab_sticker, R.strin
 
 // ==================================================================== root / nav
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QanvasRoot(vm: MainViewModel) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val gate by vm.gate.collectAsState()
     val gen by vm.gen.collectAsState()
     val toastMsg by vm.toast.collectAsState()
+    val event by vm.events.collectAsState()
+    val clipCard by vm.clipCard.collectAsState()
     val snackbar = remember { SnackbarHostState() }
     val ctx = LocalContext.current
+    var showDetail by remember { mutableStateOf<GenRecord?>(null) }
 
     // toast keys → localized snackbar
     LaunchedEffect(toastMsg) {
@@ -118,8 +137,71 @@ fun QanvasRoot(vm: MainViewModel) {
             "__migrate_done__" -> snackbar.showSnackbar(ctx.getString(R.string.toast_migrate_done))
             "__reset_dir__" -> snackbar.showSnackbar(ctx.getString(R.string.toast_reset_dir))
             "__lang__" -> snackbar.showSnackbar(ctx.getString(R.string.toast_lang_set))
+            "__inspo_applied__" -> snackbar.showSnackbar(ctx.getString(R.string.inspo_applied))
+            "__edit_loaded__" -> snackbar.showSnackbar(ctx.getString(R.string.edit_loaded))
         }
         if (toastMsg != null) vm.toastShown()
+    }
+
+    // cross-tab events
+    LaunchedEffect(event) {
+        when (val e = event) {
+            is UiEvent.GoTab -> tab = e.tab
+            else -> {}
+        }
+        if (event != null) vm.eventHandled()
+    }
+
+    // prefill prompt → route to the right create tab
+    val prefill by vm.prefillPrompt.collectAsState()
+    LaunchedEffect(prefill) {
+        if (prefill != null) vm.toast("__inspo_applied__")
+    }
+
+    // edit-from-gallery routing
+    val editRec by vm.editFromRecord.collectAsState()
+    LaunchedEffect(editRec) {
+        if (editRec != null) {
+            vm.useRecordAsEditInput(editRec!!)
+            vm.consumeEditFromRecord()
+            vm.toast("__edit_loaded__")
+        }
+    }
+
+    // clipboard share card on resume
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(1200) // let the system settle clipboard access
+        vm.checkClipboard()
+    }
+
+    // notification tap → jump to tab (download→settings, generation→create)
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(300)
+        val req = com.samge.qanvas.MainActivity.openTabRequest
+        if (req in 0..5) {
+            tab = req
+            com.samge.qanvas.MainActivity.openTabRequest = -1
+        }
+    }
+    clipCard?.let { rec ->
+        AlertDialog(
+            onDismissRequest = { vm.dismissClipCard() },
+            title = { Text(stringResource(R.string.clip_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.clip_body_fmt,
+                        "${rec.width}×${rec.height} · ${rec.steps} steps · seed ${rec.seed}\n${rec.prompt.take(120)}",
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { vm.applyClipCard(rec) }) { Text(stringResource(R.string.clip_apply)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { vm.dismissClipCard() }) { Text(stringResource(R.string.clip_ignore)) }
+            },
+        )
     }
 
     Scaffold(
@@ -127,7 +209,7 @@ fun QanvasRoot(vm: MainViewModel) {
         snackbarHost = { SnackbarHost(snackbar) },
     ) { pad ->
         Column(Modifier.padding(pad).fillMaxSize()) {
-            // scrollable single-line tab bar: never wraps to two lines on narrow screens
+            // scrollable single-line tab bar
             @OptIn(ExperimentalMaterial3Api::class)
             androidx.compose.material3.SecondaryScrollableTabRow(
                 selectedTabIndex = tab,
@@ -153,11 +235,15 @@ fun QanvasRoot(vm: MainViewModel) {
                 0 -> if (gate.modelPresent) CreateTab(vm, gen) else MissingModelGate(vm)
                 1 -> if (gate.modelPresent) StickerTab(vm, gen) else MissingModelGate(vm)
                 2 -> if (gate.modelPresent) EditTab(vm, gen) else MissingModelGate(vm)
-                3 -> GalleryTab(vm)
-                4 -> InspoTab()
+                3 -> GalleryTab(vm, onOpen = { showDetail = it })
+                4 -> InspoTab(vm)
                 5 -> SettingsTab(vm, gen)
             }
         }
+    }
+
+    showDetail?.let { rec ->
+        RecordDetailDialog(vm, rec, onClose = { showDetail = null })
     }
 }
 
@@ -186,21 +272,15 @@ private fun QanvasTopBar(gate: GateStatus, onSettings: () -> Unit) {
             }
             Spacer(Modifier.weight(1f))
             if (gate.modelPresent) {
-                Icon(
-                    Icons.Filled.CheckCircle, stringResource(R.string.model_ready),
-                    tint = AppleTokens.Green, modifier = Modifier.size(18.dp),
-                )
+                Icon(Icons.Filled.CheckCircle, stringResource(R.string.model_ready),
+                    tint = AppleTokens.Green, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
-                Text(
-                    stringResource(R.string.model_ready),
+                Text(stringResource(R.string.model_ready),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
-                Icon(
-                    Icons.Filled.Warning, stringResource(R.string.model_missing),
-                    tint = AppleTokens.Orange, modifier = Modifier.size(18.dp),
-                )
+                Icon(Icons.Filled.Warning, stringResource(R.string.model_missing),
+                    tint = AppleTokens.Orange, modifier = Modifier.size(18.dp))
             }
             Spacer(Modifier.width(6.dp))
             IconButton(onClick = onSettings) {
@@ -211,165 +291,6 @@ private fun QanvasTopBar(gate: GateStatus, onSettings: () -> Unit) {
 }
 
 // ==================================================================== shared controls
-
-/** Full-page redirect for Create/Sticker/Edit when the model isn't installed yet. */
-@Composable
-fun MissingModelGate(vm: MainViewModel) {
-    val gate by vm.gate.collectAsState()
-    val gen by vm.gen.collectAsState()
-    val dl = gen.kind == GenBus.Kind.DOWNLOADING
-
-    LazyColumn(
-        Modifier.fillMaxSize().padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        item {
-            Spacer(Modifier.height(16.dp))
-            Text(
-                stringResource(R.string.home_title),
-                style = MaterialTheme.typography.headlineSmall, lineHeight = 28.sp,
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                stringResource(R.string.home_desc),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                FeaturePill(Icons.Filled.Palette, stringResource(R.string.feature_t2i))
-                FeaturePill(Icons.Filled.Edit, stringResource(R.string.feature_edit))
-                FeaturePill(Icons.Filled.Star, stringResource(R.string.feature_sticker))
-            }
-        }
-        item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                shape = RoundedCornerShape(18.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-            ) {
-                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(stringResource(R.string.gate_title), style = MaterialTheme.typography.titleMedium)
-                    GateRow(
-                        ok = true,
-                        label = stringResource(
-                            R.string.ram_fmt,
-                            if (gate.ramMB > 0) String.format(Locale.US, "%.1f", gate.ramMB / 1024.0) + " GB" else "…",
-                        ),
-                        note = stringResource(if (gate.ramOk) R.string.ram_ok else R.string.ram_low),
-                        icon = { Icon(Icons.Filled.Memory, null, tint = it) },
-                    )
-                    GateRow(
-                        ok = gate.storageOk,
-                        label = stringResource(
-                            R.string.storage_fmt,
-                            String.format(Locale.US, "%.1f", gate.freeBytes / 1e9),
-                        ),
-                        note = stringResource(if (gate.storageOk) R.string.storage_ok else R.string.storage_low),
-                        icon = { Icon(Icons.Filled.CheckCircle, null, tint = it) },
-                    )
-                    Text(
-                        stringResource(R.string.gate_desc),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-        if (dl) {
-            item {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    shape = RoundedCornerShape(18.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                ) {
-                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                            Spacer(Modifier.width(10.dp))
-                            Text(
-                                stringResource(R.string.notif_downloading) + " ${gen.progress}%",
-                                style = MaterialTheme.typography.titleMedium,
-                            )
-                            Spacer(Modifier.weight(1f))
-                            TextButton(onClick = { GenService.requestStop(vm.getApplication()) }) {
-                                Text(stringResource(R.string.set_download_stop))
-                            }
-                        }
-                        LinearProgressIndicator(
-                            progress = { gen.progress / 100f },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        Text(
-                            gen.detail,
-                            style = MaterialTheme.typography.bodySmall,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-        }
-        item {
-            Button(
-                onClick = { vm.startDownload() },
-                enabled = !dl,
-                shape = RoundedCornerShape(999.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AppleTokens.ActionBlue),
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-            ) {
-                Icon(Icons.Filled.AutoAwesome, null, Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.set_download_btn), fontWeight = FontWeight.Medium)
-            }
-        }
-        item {
-            OutlinedButton(
-                onClick = { },
-                enabled = false,
-                shape = RoundedCornerShape(999.dp),
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-            ) { Text("adb push → " + GenEngine.MODEL_DIR_NAME) }
-        }
-        item { Spacer(Modifier.height(30.dp)) }
-    }
-}
-
-@Composable
-private fun FeaturePill(icon: ImageVector, label: String) {
-    Surface(
-        shape = RoundedCornerShape(999.dp),
-        color = AppleTokens.VioletSoft,
-        border = BorderStroke(1.dp, Color(0x1A6C5CE7)),
-    ) {
-        Row(
-            Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(icon, null, Modifier.size(14.dp), tint = AppleTokens.Violet)
-            Spacer(Modifier.width(6.dp))
-            Text(label, style = MaterialTheme.typography.labelMedium, color = AppleTokens.Violet)
-        }
-    }
-}
-
-@Composable
-private fun GateRow(ok: Boolean, label: String, note: String, icon: @Composable (Color) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        val tint = if (ok) AppleTokens.Green else AppleTokens.Orange
-        Box(
-            Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(tint.copy(alpha = 0.12f)),
-            contentAlignment = Alignment.Center,
-        ) { icon(tint) }
-        Spacer(Modifier.width(10.dp))
-        Column {
-            Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-            Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -451,7 +372,7 @@ fun ProgressCard(gen: GenBus.State, estimateSec: Int) {
         "vae" -> stringResource(R.string.notif_stage_vae)
         "denoise" -> stringResource(R.string.notif_stage_denoise, gen.stageStep, 20)
         "" -> stringResource(R.string.progress_preparing)
-        else -> gen.stage // download filename
+        else -> gen.stage
     }
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -479,8 +400,64 @@ fun ProgressCard(gen: GenBus.State, estimateSec: Int) {
     }
 }
 
+/** Fullscreen zoomable image viewer. */
 @Composable
-fun ResultCard(bitmap: android.graphics.Bitmap?, checker: Boolean = false) {
+fun ZoomDialog(path: String, onDismiss: () -> Unit) {
+    var scale by remember { mutableFloatStateOf(1f) }
+    var offsetX by remember { mutableFloatStateOf(0f) }
+    var offsetY by remember { mutableFloatStateOf(0f) }
+    val bmp = remember(path) {
+        val o = android.graphics.BitmapFactory.Options().apply { inSampleSize = 1 }
+        android.graphics.BitmapFactory.decodeFile(path, o)
+    }
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            Modifier.fillMaxSize().background(Color(0xEE101014)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (bmp != null) {
+                Image(
+                    bitmap = bmp.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer(
+                            scaleX = scale, scaleY = scale,
+                            translationX = offsetX, translationY = offsetY,
+                        )
+                        .pointerInput(Unit) {
+                            detectTransformGestures { _, pan, zoom, _ ->
+                                scale = (scale * zoom).coerceIn(1f, 5f)
+                                if (scale > 1f) {
+                                    offsetX += pan.x; offsetY += pan.y
+                                } else { offsetX = 0f; offsetY = 0f }
+                            }
+                        }
+                        .clickable { if (scale > 1f) { scale = 1f; offsetX = 0f; offsetY = 0f } else onDismiss() },
+                    contentScale = ContentScale.Fit,
+                )
+            } else {
+                Text("…", color = Color.White)
+            }
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(12.dp),
+            ) {
+                Icon(Icons.Filled.Close, stringResource(R.string.close), tint = Color.White)
+            }
+            Text(
+                stringResource(R.string.tap_zoom_hint),
+                color = Color(0x99FFFFFF),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(16.dp),
+            )
+        }
+    }
+}
+
+@Composable
+fun ResultCard(bitmap: android.graphics.Bitmap?, outPath: String? = null, checker: Boolean = false) {
+    var zoom by remember { mutableStateOf(false) }
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(18.dp),
@@ -492,7 +469,8 @@ fun ResultCard(bitmap: android.graphics.Bitmap?, checker: Boolean = false) {
                     .height(240.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(if (checker) Color(0xFFE8E8ED) else MaterialTheme.colorScheme.surfaceVariant)
-                    .border(1.dp, if (checker) Color(0xFFD5D5DC) else MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp)),
+                    .border(1.dp, if (checker) Color(0xFFD5D5DC) else MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
+                    .then(if (bitmap != null) Modifier.clickable { zoom = true } else Modifier),
                 contentAlignment = Alignment.Center,
             ) {
                 if (bitmap != null) {
@@ -512,6 +490,9 @@ fun ResultCard(bitmap: android.graphics.Bitmap?, checker: Boolean = false) {
             }
         }
     }
+    if (zoom && outPath != null) {
+        ZoomDialog(outPath) { zoom = false }
+    }
 }
 
 // ==================================================================== tabs (Create / Sticker / Edit)
@@ -522,8 +503,16 @@ fun CreateTab(vm: MainViewModel, gen: GenBus.State) {
     val tier by vm.tierOrdinal.collectAsState()
     val steps by vm.steps.collectAsState()
     val result by vm.result.collectAsState()
-    var prompt by rememberSaveable { mutableStateOf("") }
     val modelReady = vm.gate.collectAsState().value.modelPresent
+    val prefill by vm.prefillPrompt.collectAsState()
+    var prompt by rememberSaveable { mutableStateOf("") }
+
+    // consume prefill (inspo / clipboard / reuse)
+    LaunchedEffect(prefill) {
+        if (prefill != null) { prompt = prefill!!; vm.consumePrefill() }
+    }
+
+    val resultPath: String? = vm.gen.collectAsState().value.doneFile
 
     LazyColumn(
         Modifier.fillMaxSize().padding(horizontal = 20.dp),
@@ -563,7 +552,7 @@ fun CreateTab(vm: MainViewModel, gen: GenBus.State) {
         }
         if (gen.kind == GenBus.Kind.OOM) item { OomCard() }
         if (gen.kind == GenBus.Kind.ERROR) item { ErrorCard(gen.error ?: "unknown") }
-        item { ResultCard(result) }
+        item { ResultCard(result, resultPath) }
         item { Spacer(Modifier.height(30.dp)) }
     }
 }
@@ -576,7 +565,14 @@ fun StickerTab(vm: MainViewModel, gen: GenBus.State) {
     val steps by vm.steps.collectAsState()
     val result by vm.result.collectAsState()
     val modelReady = vm.gate.collectAsState().value.modelPresent
-    var prompt by rememberSaveable { mutableStateOf(Inspo.byKind(Inspo.Kind.STICKER).first().prompt) }
+    val prefill by vm.prefillPrompt.collectAsState()
+    var prompt by rememberSaveable { mutableStateOf(Inspo.byKind(Inspo.Kind.STICKER).first().promptFor(Inspo.isZh())) }
+
+    LaunchedEffect(prefill) {
+        if (prefill != null) { prompt = prefill!!; vm.consumePrefill() }
+    }
+
+    val resultPath: String? = vm.gen.collectAsState().value.doneFile
 
     LazyColumn(
         Modifier.fillMaxSize().padding(horizontal = 20.dp),
@@ -588,11 +584,8 @@ fun StickerTab(vm: MainViewModel, gen: GenBus.State) {
                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.Star, null, Modifier.size(16.dp), tint = AppleTokens.Violet)
                     Spacer(Modifier.width(8.dp))
-                    Text(
-                        stringResource(R.string.sticker_tip),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = AppleTokens.Violet,
-                    )
+                    Text(stringResource(R.string.sticker_tip),
+                        style = MaterialTheme.typography.bodySmall, color = AppleTokens.Violet)
                 }
             }
         }
@@ -629,7 +622,7 @@ fun StickerTab(vm: MainViewModel, gen: GenBus.State) {
         }
         if (gen.kind == GenBus.Kind.OOM) item { OomCard() }
         if (gen.kind == GenBus.Kind.ERROR) item { ErrorCard(gen.error ?: "unknown") }
-        item { ResultCard(result, checker = true) }
+        item { ResultCard(result, resultPath, checker = true) }
         item { Spacer(Modifier.height(30.dp)) }
     }
 }
@@ -653,11 +646,9 @@ fun EditTab(vm: MainViewModel, gen: GenBus.State) {
         item {
             Spacer(Modifier.height(8.dp))
             Text(stringResource(R.string.edit_title), style = MaterialTheme.typography.titleMedium)
-            Text(
-                stringResource(R.string.edit_desc),
+            Text(stringResource(R.string.edit_desc),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         item {
             if (editInput == null) {
@@ -667,18 +658,13 @@ fun EditTab(vm: MainViewModel, gen: GenBus.State) {
                     color = MaterialTheme.colorScheme.surface,
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                 ) {
-                    Column(
-                        Modifier.fillMaxWidth().padding(28.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
+                    Column(Modifier.fillMaxWidth().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Outlined.PhotoLibrary, null, Modifier.size(36.dp), tint = AppleTokens.ActionBlue)
                         Spacer(Modifier.height(8.dp))
                         Text(stringResource(R.string.edit_pick_title), style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            stringResource(R.string.edit_pick_sub),
+                        Text(stringResource(R.string.edit_pick_sub),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             } else {
@@ -689,22 +675,16 @@ fun EditTab(vm: MainViewModel, gen: GenBus.State) {
                 ) {
                     Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                stringResource(R.string.edit_input_fmt, editInput!!.width, editInput!!.height),
-                                style = MaterialTheme.typography.bodySmall,
-                            )
+                            Text(stringResource(R.string.edit_input_fmt, editInput!!.width, editInput!!.height),
+                                style = MaterialTheme.typography.bodySmall)
                             Spacer(Modifier.weight(1f))
-                            TextButton(onClick = { vm.clearEditImage() }) {
-                                Text(stringResource(R.string.edit_remove))
-                            }
+                            TextButton(onClick = { vm.clearEditImage() }) { Text(stringResource(R.string.edit_remove)) }
                         }
                         val out = QwenImage21SizeProxy.editSize(editInput!!.width, editInput!!.height, tier)
-                        Text(
-                            stringResource(R.string.edit_output_fmt, out[0], out[1]),
+                        Text(stringResource(R.string.edit_output_fmt, out[0], out[1]),
                             style = MaterialTheme.typography.bodySmall,
                             fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -724,11 +704,8 @@ fun EditTab(vm: MainViewModel, gen: GenBus.State) {
                 Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.Bolt, null, Modifier.size(16.dp), tint = AppleTokens.Violet)
                     Spacer(Modifier.width(8.dp))
-                    Text(
-                        stringResource(R.string.fast_tip),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = AppleTokens.Violet,
-                    )
+                    Text(stringResource(R.string.fast_tip),
+                        style = MaterialTheme.typography.bodySmall, color = AppleTokens.Violet)
                 }
             }
         }
@@ -763,12 +740,14 @@ fun EditTab(vm: MainViewModel, gen: GenBus.State) {
     }
 }
 
-// ==================================================================== gallery & inspo
+// ==================================================================== gallery & detail
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun GalleryTab(vm: MainViewModel) {
+fun GalleryTab(vm: MainViewModel, onOpen: (GenRecord) -> Unit) {
     val history by vm.history.collectAsState()
     var confirmDelete by remember { mutableStateOf<GenRecord?>(null) }
+    var zoomPath by remember { mutableStateOf<String?>(null) }
 
     if (history.isEmpty()) {
         Column(
@@ -779,16 +758,15 @@ fun GalleryTab(vm: MainViewModel) {
             Icon(Icons.Outlined.PhotoLibrary, null, Modifier.size(44.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(10.dp))
             Text(stringResource(R.string.gallery_empty_title), style = MaterialTheme.typography.titleMedium)
-            Text(
-                stringResource(R.string.gallery_empty_sub),
+            Text(stringResource(R.string.gallery_empty_sub),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         return
     }
 
-    val fmt = remember { SimpleDateFormat("MM/dd HH:mm", Locale.getDefault()) }
+    val datePattern = stringResource(R.string.date_fmt)
+    val fmt = remember(datePattern) { SimpleDateFormat(datePattern, Locale.getDefault()) }
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         Modifier.fillMaxSize().padding(horizontal = 20.dp),
@@ -800,6 +778,7 @@ fun GalleryTab(vm: MainViewModel) {
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                modifier = Modifier.clickable { onOpen(rec) },
             ) {
                 Column(Modifier.fillMaxWidth().padding(10.dp)) {
                     val bmp = remember(rec.outPath) {
@@ -818,13 +797,11 @@ fun GalleryTab(vm: MainViewModel) {
                         Box(Modifier.fillMaxWidth().height(140.dp).background(MaterialTheme.colorScheme.surfaceVariant))
                     }
                     Spacer(Modifier.height(8.dp))
-                    Text(
-                        rec.prompt, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium,
-                    )
+                    Text(rec.prompt, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        stringResource(R.string.rec_meta_fmt, rec.mode, rec.width, rec.height, rec.steps, rec.seed),
+                        stringResource(R.string.rec_meta_fmt, modeLabel(rec.mode), rec.width, rec.height, rec.steps, rec.seed),
                         style = MaterialTheme.typography.bodySmall,
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -836,17 +813,12 @@ fun GalleryTab(vm: MainViewModel) {
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Row {
-                        TextButton(onClick = { confirmDelete = rec }) {
-                            Icon(Icons.Filled.Delete, null, Modifier.size(14.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text(stringResource(R.string.delete_confirm))
-                        }
-                    }
                 }
             }
         }
     }
+
+    zoomPath?.let { p -> ZoomDialog(p) { zoomPath = null } }
 
     confirmDelete?.let { rec ->
         AlertDialog(
@@ -865,9 +837,123 @@ fun GalleryTab(vm: MainViewModel) {
     }
 }
 
+@Composable
+fun modeLabel(mode: String): String = when (mode) {
+    "edit" -> stringResource(R.string.mode_edit)
+    "sticker" -> stringResource(R.string.mode_sticker)
+    else -> stringResource(R.string.mode_t2i)
+}
+
+/** Full detail dialog: image + all params + timing breakdown + share/edit actions. */
+@Composable
+fun RecordDetailDialog(vm: MainViewModel, rec: GenRecord, onClose: () -> Unit) {
+    var zoom by remember { mutableStateOf(false) }
+    val ctx = LocalContext.current
+    val datePattern = stringResource(R.string.date_fmt)
+    val fmt = remember(datePattern) { SimpleDateFormat(datePattern, Locale.getDefault()) }
+
+    Dialog(onDismissRequest = onClose) {
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.detail_title), style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.weight(1f))
+                    IconButton(onClick = onClose) {
+                        Icon(Icons.Filled.Close, stringResource(R.string.close))
+                    }
+                }
+                val bmp = remember(rec.outPath) {
+                    val o = android.graphics.BitmapFactory.Options().apply { inSampleSize = 2 }
+                    android.graphics.BitmapFactory.decodeFile(rec.outPath, o)
+                }
+                if (bmp != null) {
+                    Image(
+                        bitmap = bmp.asImageBitmap(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable { zoom = true },
+                        contentScale = ContentScale.Fit,
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                DetailRow(stringResource(R.string.d_prompt), rec.prompt)
+                DetailRow(stringResource(R.string.d_mode), modeLabel(rec.mode))
+                DetailRow(stringResource(R.string.d_size), "${rec.width} × ${rec.height}")
+                DetailRow(stringResource(R.string.d_steps), rec.steps.toString())
+                DetailRow(stringResource(R.string.d_seed), rec.seed.toString())
+                DetailRow(stringResource(R.string.d_start), fmt.format(Date(rec.startAt.takeIf { it > 0 } ?: rec.createdAt)))
+                DetailRow(stringResource(R.string.d_model_load), stringResource(R.string.sec_fmt, rec.modelLoadMs / 1000.0))
+                DetailRow(stringResource(R.string.d_gen), stringResource(R.string.sec_fmt, rec.genMs / 1000.0))
+                DetailRow(stringResource(R.string.d_end), if (rec.endAt > 0) fmt.format(Date(rec.endAt)) else "—")
+                DetailRow(stringResource(R.string.d_total), stringResource(R.string.sec_fmt, rec.durationMs / 1000.0), bold = true)
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = {
+                            val send = Intent(android.content.Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(android.content.Intent.EXTRA_TEXT, ShareCard.shareText(rec))
+                            }
+                            ctx.startActivity(Intent.createChooser(send, ctx.getString(R.string.share_title)))
+                        },
+                        shape = RoundedCornerShape(999.dp),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(Icons.Filled.Share, null, Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.d_share))
+                    }
+                    OutlinedButton(
+                        onClick = { vm.sendToEdit(rec); onClose() },
+                        enabled = File(rec.outPath).isFile,
+                        shape = RoundedCornerShape(999.dp),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(Icons.Filled.Edit, null, Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.d_edit_img))
+                    }
+                    OutlinedButton(
+                        onClick = { vm.reusePrompt(rec); onClose() },
+                        shape = RoundedCornerShape(999.dp),
+                    ) { Text(stringResource(R.string.d_reuse)) }
+                }
+            }
+        }
+    }
+    if (zoom) {
+        ZoomDialog(rec.outPath) { zoom = false }
+    }
+}
+
+@Composable
+private fun DetailRow(label: String, value: String, bold: Boolean = false) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+        Text(
+            label, style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(92.dp),
+        )
+        Text(
+            value,
+            style = if (bold) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
+            fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal,
+            fontFamily = if (bold) FontFamily.Default else FontFamily.Monospace,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+// ==================================================================== inspo
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun InspoTab() {
+fun InspoTab(vm: MainViewModel) {
     val zh = remember { Inspo.isZh() }
     val groupTitles = listOf(
         stringResource(R.string.inspo_t2i),
@@ -881,6 +967,7 @@ fun InspoTab() {
         Modifier.fillMaxSize().padding(horizontal = 20.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 32.dp),
     ) {
         kinds.forEachIndexed { gi, kind ->
             item(span = { GridItemSpan(2) }) {
@@ -894,6 +981,9 @@ fun InspoTab() {
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                    modifier = Modifier.clickable {
+                        vm.applyInspo(card)   // prefill + jump to Create/Sticker
+                    },
                 ) {
                     Column(Modifier.fillMaxWidth().padding(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -918,9 +1008,139 @@ fun InspoTab() {
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             lineHeight = 15.sp,
                         )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            stringResource(R.string.d_reuse),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = AppleTokens.ActionBlue,
+                            fontWeight = FontWeight.Medium,
+                        )
                     }
                 }
             }
+        }
+    }
+}
+
+// ==================================================================== missing-model gate
+
+@Composable
+fun MissingModelGate(vm: MainViewModel) {
+    val gate by vm.gate.collectAsState()
+    val gen by vm.gen.collectAsState()
+    val dl = gen.kind == GenBus.Kind.DOWNLOADING
+
+    LazyColumn(
+        Modifier.fillMaxSize().padding(horizontal = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        item {
+            Spacer(Modifier.height(16.dp))
+            Text(stringResource(R.string.home_title), style = MaterialTheme.typography.headlineSmall, lineHeight = 28.sp)
+            Spacer(Modifier.height(6.dp))
+            Text(stringResource(R.string.home_desc), style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                FeaturePill(Icons.Filled.Palette, stringResource(R.string.feature_t2i))
+                FeaturePill(Icons.Filled.Edit, stringResource(R.string.feature_edit))
+                FeaturePill(Icons.Filled.Star, stringResource(R.string.feature_sticker))
+            }
+        }
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(18.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+            ) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(stringResource(R.string.gate_title), style = MaterialTheme.typography.titleMedium)
+                    GateRow(true,
+                        stringResource(R.string.ram_fmt, if (gate.ramMB > 0) String.format(Locale.US, "%.1f", gate.ramMB / 1024.0) + " GB" else "…"),
+                        stringResource(if (gate.ramOk) R.string.ram_ok else R.string.ram_low)) {
+                        Icon(Icons.Filled.Memory, null, tint = it)
+                    }
+                    GateRow(gate.storageOk,
+                        stringResource(R.string.storage_fmt, String.format(Locale.US, "%.1f", gate.freeBytes / 1e9)),
+                        stringResource(if (gate.storageOk) R.string.storage_ok else R.string.storage_low)) {
+                        Icon(Icons.Filled.CheckCircle, null, tint = it)
+                    }
+                    Text(stringResource(R.string.gate_desc), style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+        if (dl) {
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    shape = RoundedCornerShape(18.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                ) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(10.dp))
+                            Text(stringResource(R.string.notif_downloading) + " ${gen.progress}%",
+                                style = MaterialTheme.typography.titleMedium)
+                            Spacer(Modifier.weight(1f))
+                            TextButton(onClick = { GenService.requestStop(vm.getApplication()) }) {
+                                Text(stringResource(R.string.set_download_stop))
+                            }
+                        }
+                        LinearProgressIndicator(progress = { gen.progress / 100f }, modifier = Modifier.fillMaxWidth())
+                        Text(gen.detail, style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+        item {
+            Button(
+                onClick = { vm.startDownload() },
+                enabled = !dl,
+                shape = RoundedCornerShape(999.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = AppleTokens.ActionBlue),
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+            ) {
+                Icon(Icons.Filled.AutoAwesome, null, Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.set_download_btn), fontWeight = FontWeight.Medium, fontSize = 15.sp)
+            }
+        }
+        item { Spacer(Modifier.height(30.dp)) }
+    }
+}
+
+@Composable
+private fun FeaturePill(icon: ImageVector, label: String) {
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = AppleTokens.VioletSoft,
+        border = BorderStroke(1.dp, Color(0x1A6C5CE7)),
+    ) {
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, null, Modifier.size(14.dp), tint = AppleTokens.Violet)
+            Spacer(Modifier.width(6.dp))
+            Text(label, style = MaterialTheme.typography.labelMedium, color = AppleTokens.Violet)
+        }
+    }
+}
+
+@Composable
+private fun GateRow(ok: Boolean, label: String, note: String, icon: @Composable (Color) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        val tint = if (ok) AppleTokens.Green else AppleTokens.Orange
+        Box(
+            Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(tint.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center,
+        ) { icon(tint) }
+        Spacer(Modifier.width(10.dp))
+        Column {
+            Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -933,32 +1153,27 @@ fun GenServiceRunning(gen: GenBus.State): Boolean =
 @Composable
 fun GenerateButton(enabled: Boolean, running: Boolean, modelReady: Boolean, onClick: () -> Unit) {
     Button(
-        onClick = {
-            if (modelReady) onClick()
-        },
+        onClick = { if (modelReady) onClick() },
         enabled = enabled || (running && modelReady),
         shape = RoundedCornerShape(999.dp),
         colors = ButtonDefaults.buttonColors(containerColor = AppleTokens.ActionBlue),
-        modifier = Modifier.fillMaxWidth().height(52.dp),
+        modifier = Modifier.fillMaxWidth().height(48.dp),
     ) {
         if (running) {
-            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
+            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
             Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.btn_generate_running), fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.btn_generate_running), fontWeight = FontWeight.Medium, fontSize = 15.sp)
         } else {
-            Icon(Icons.Filled.AutoAwesome, null, Modifier.size(18.dp))
+            Icon(Icons.Filled.AutoAwesome, null, Modifier.size(16.dp))
             Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.btn_generate), fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.btn_generate), fontWeight = FontWeight.Medium, fontSize = 15.sp)
         }
     }
 }
 
 @Composable
 fun OomCard() {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = Color(0x14FF9500)),
-        shape = RoundedCornerShape(18.dp),
-    ) {
+    Card(colors = CardDefaults.cardColors(containerColor = Color(0x14FF9500)), shape = RoundedCornerShape(18.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.Warning, null, Modifier.size(18.dp), tint = AppleTokens.Orange)
@@ -973,10 +1188,7 @@ fun OomCard() {
 
 @Composable
 fun ErrorCard(msg: String) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = Color(0x14D70015)),
-        shape = RoundedCornerShape(18.dp),
-    ) {
+    Card(colors = CardDefaults.cardColors(containerColor = Color(0x14D70015)), shape = RoundedCornerShape(18.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
             Text(stringResource(R.string.err_title), style = MaterialTheme.typography.titleMedium, color = AppleTokens.Red)
             Spacer(Modifier.height(6.dp))

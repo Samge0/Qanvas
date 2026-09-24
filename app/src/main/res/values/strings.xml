@@ -145,6 +145,43 @@
     <string name="reset_dir_confirm">Reset to the default app directory? Files in the custom directory stay in place.</string>
     <string name="dir_pick_storage_fmt">Storage %1$d</string>
 
+    <!-- v1.1.2 additions: gallery detail -->
+    <string name="detail_title">Creation details</string>
+    <string name="d_prompt">Prompt</string>
+    <string name="d_mode">Mode</string>
+    <string name="d_size">Size</string>
+    <string name="d_steps">Steps</string>
+    <string name="d_seed">Seed</string>
+    <string name="d_start">Started</string>
+    <string name="d_model_load">Model load</string>
+    <string name="d_gen">Generation</string>
+    <string name="d_end">Finished</string>
+    <string name="d_total">Total</string>
+    <string name="d_share">Share</string>
+    <string name="d_edit_img">Edit this image</string>
+    <string name="d_reuse">Reuse prompt</string>
+    <string name="close">Close</string>
+    <string name="sec_fmt">%1$s s</string>
+    <string name="date_fmt">MM/dd HH:mm:ss</string>
+    <string name="mode_t2i">Text → Image</string>
+    <string name="mode_edit">Edit</string>
+    <string name="mode_sticker">Sticker</string>
+    <string name="tap_zoom_hint">Tap image to zoom · pinch to scale · tap again to close</string>
+
+    <!-- share / clipboard -->
+    <string name="share_title">Share creation</string>
+    <string name="clip_title">Qanvas share card detected</string>
+    <string name="clip_body_fmt">Reproduce this creation in your gallery?\n\n%1$s</string>
+    <string name="clip_apply">Reproduce</string>
+    <string name="clip_ignore">Ignore</string>
+    <string name="inspo_applied">Prompt applied — ready to generate</string>
+    <string name="edit_loaded">Image loaded into Edit tab</string>
+
+    <!-- hot load -->
+    <string name="set_keep_title">Performance</string>
+    <string name="set_keep_enable">Keep model in memory (hot reload)</string>
+    <string name="set_keep_desc">Skips the ~20–30 s model load on every generation. Costs ~4–6 GB of reserved RAM while enabled; free it anytime by turning this off.</string>
+
     <!-- notifications (service) -->
     <string name="notif_title">Qanvas</string>
     <string name="notif_downloading">Downloading model</string>
