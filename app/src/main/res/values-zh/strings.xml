@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Qanvas</string>
+
+    <!-- tabs -->
+    <string name="tab_create">创作</string>
+    <string name="tab_sticker">贴纸</string>
+    <string name="tab_edit">改图</string>
+    <string name="tab_gallery">画廊</string>
+    <string name="tab_inspo">灵感</string>
+    <string name="tab_settings">设置</string>
+
+    <!-- top bar -->
+    <string name="top_subtitle">Qwen-Image-2.1 · 7B · 端侧运行</string>
+    <string name="model_ready">模型就绪</string>
+    <string name="model_missing">模型未安装</string>
+
+    <!-- home / gate -->
+    <string name="home_title">私有 AI 画布，\n完全运行在你的手机上。</string>
+    <string name="home_desc">Qwen-Image-2.1 · 7B 扩散变换器 · int4 on OpenCL。无云端、无上传、无账号——你的照片永不离开设备。</string>
+    <string name="feature_t2i">文生图</string>
+    <string name="feature_edit">AI 改图</string>
+    <string name="feature_sticker">透明贴纸</string>
+    <string name="gate_title">一次性模型准备</string>
+    <string name="gate_desc">模型约 10.6 GB，来自 Hugging Face · 断点续传 · 校验和验证。强烈建议使用 Wi-Fi。</string>
+    <string name="ram_fmt">内存 %1$s</string>
+    <string name="ram_ok">达到推荐配置</string>
+    <string name="ram_low">建议 12 GB+ —— 请使用 Fast/Tiny 档位</string>
+    <string name="storage_fmt">可用存储 %1$s / 需 11 GB</string>
+    <string name="storage_ok">空间充足</string>
+    <string name="storage_low">请先清理空间</string>
+
+    <!-- missing-model banner -->
+    <string name="banner_missing">模型尚未下载。请先到设置页完成下载。</string>
+    <string name="banner_action">去设置</string>
+
+    <!-- generation controls -->
+    <string name="create_placeholder">描述画面… 例如："雨夜里写着 QWEN 的霓虹灯招牌"</string>
+    <string name="sticker_placeholder">贴纸主题… 保留 RGBA 模板文字</string>
+    <string name="edit_placeholder">描述修改内容… 例如："把背景换成日落海滩"</string>
+    <string name="ratio_label">画面比例</string>
+    <string name="tier_label">质量档位</string>
+    <string name="tier_standard">标准</string>
+    <string name="tier_fast">快速</string>
+    <string name="tier_tiny">迷你</string>
+    <string name="pixel_budget_label">像素预算</string>
+    <string name="steps_label">步数</string>
+    <string name="seed_label">种子</string>
+    <string name="size_fmt">输出 %1$d×%2$d · %3$d tokens/步 · 预计 ~%4$d 分钟</string>
+    <string name="edit_est_fmt">改图预计 ~%1$d 分钟</string>
+    <string name="fast_tip">提示：快速档比标准档更保人脸与身份（上游实测），因此这里默认快速档。</string>
+    <string name="sticker_tip">原生 RGBA 透明通道——Qwen-Image-2.1 端侧独家能力。导出真正的透明 PNG 贴纸。</string>
+    <string name="btn_generate">端侧生成</string>
+    <string name="btn_generate_running">生成中——见通知栏…</string>
+    <string name="progress_preparing">准备中…</string>
+    <string name="progress_note_fmt">骁龙 8 Gen 2 级别设备约 %1$d 分钟 · 离开页面后通知栏持续显示进度</string>
+    <string name="oom_title">内存不足——可恢复</string>
+    <string name="oom_body">缓冲已释放，没有损坏。关闭其他应用重试，或降到更小档位（快速/迷你）。</string>
+    <string name="err_title">生成失败</string>
+    <string name="result_placeholder">结果将显示在这里</string>
+
+    <!-- edit tab -->
+    <string name="edit_title">AI 照片编辑</string>
+    <string name="edit_desc">选择照片，描述修改。输出按档位预算保持输入图比例。</string>
+    <string name="edit_pick_title">选择要编辑的照片</string>
+    <string name="edit_pick_sub">留在你的设备上——从不上传</string>
+    <string name="edit_input_fmt">输入 %1$d×%2$d</string>
+    <string name="edit_output_fmt">→ 此档位输出 %1$d×%2$d</string>
+    <string name="edit_remove">移除</string>
+
+    <!-- gallery -->
+    <string name="gallery_empty_title">还没有作品</string>
+    <string name="gallery_empty_sub">生成的图片会连同完整参数保存在这里</string>
+    <string name="rec_meta_fmt">%1$s · %2$d×%3$d · %4$d 步 · 种子 %5$d</string>
+    <string name="rec_meta2_fmt">%1$s · %2$d 秒</string>
+    <string name="delete_title">删除这个作品？</string>
+    <string name="delete_confirm">删除</string>
+    <string name="cancel">取消</string>
+
+    <!-- inspo -->
+    <string name="inspo_t2i">文生图</string>
+    <string name="inspo_sticker">透明贴纸</string>
+    <string name="inspo_edit">照片编辑</string>
+    <string name="inspo_poster">文字海报</string>
+    <string name="inspo_use">使用</string>
+
+    <!-- settings: download -->
+    <string name="set_download_title">模型下载</string>
+    <string name="set_download_desc">Qwen-Image-2.1 MNN · int4 · 下载约 10.6 GB，安装约 11 GB。包含文生图、照片编辑与透明贴纸全部组件。\n\n这是目前最小的官方变体——体积大头是 7B DiT int4（4.3 GB）和 Qwen3-VL-8B 文本编码器 int4（4.9 GB），尚无更轻的量化版本；仅保留文生图的组合也只能省约 0.5 GB。</string>
+    <string name="set_download_btn">下载模型 · 10.6 GB</string>
+    <string name="set_download_stop">停止</string>
+    <string name="set_download_done">模型已下载 ✓</string>
+    <string name="set_download_missing_fmt">缺少文件：%1$s</string>
+
+    <!-- settings: directory -->
+    <string name="set_dir_title">模型目录</string>
+    <string name="set_dir_current_fmt">当前：%1$s</string>
+    <string name="set_dir_hint">自定义路径（必须可写，例如副存储上的 getExternalFilesDir 路径）</string>
+    <string name="set_dir_apply">使用此目录</string>
+    <string name="set_dir_reset">恢复默认目录</string>
+    <string name="set_dir_migrate">迁移模型文件到此处</string>
+    <string name="set_migrating_fmt">迁移中… %1$d%%</string>
+    <string name="set_dir_note">原生运行时需要真实文件系统路径（不支持 SAF/云盘）。大多数设备建议使用默认的应用私有存储。</string>
+    <string name="set_danger_title">危险操作</string>
+    <string name="set_delete_model">删除模型文件（释放约 11 GB）</string>
+    <string name="set_delete_confirm">删除全部模型文件？删除后需重新下载才能生成。</string>
+    <string name="toast_dir_invalid">目录不可写</string>
+    <string name="toast_dir_applied">模型目录已更新</string>
+    <string name="toast_need_download">模型未就绪——请先到设置页下载</string>
+    <string name="toast_migrate_done">模型文件已迁移</string>
+    <string name="toast_migrate_need_custom">请先设置自定义目录</string>
+
+    <!-- settings: proxy -->
+    <string name="set_proxy_title">下载代理</string>
+    <string name="set_proxy_desc">通过 HTTP 代理路由模型下载——Hugging Face 直连不可达时使用。</string>
+    <string name="set_proxy_enable">启用代理</string>
+    <string name="set_proxy_host">主机</string>
+    <string name="set_proxy_port">端口</string>
+
+    <!-- settings: language / about -->
+    <string name="set_lang_title">语言 / Language</string>
+    <string name="set_lang_system">跟随系统</string>
+    <string name="set_lang_en">English</string>
+    <string name="set_lang_zh">中文</string>
+    <string name="set_about_title">关于</string>
+    <string name="set_about_body">Qanvas %1$s · 运行时 AAR v0.2.2 · 模型：evankuo/Qwen-Image-2.1-MNN（Qwen 研究许可）</string>
+
+    <!-- notifications (service) -->
+    <string name="notif_title">Qanvas</string>
+    <string name="notif_downloading">正在下载模型</string>
+    <string name="notif_generating">正在生成</string>
+    <string name="notif_preparing">准备中</string>
+    <string name="notif_stage_load">加载模型阶段</string>
+    <string name="notif_stage_te">文本编码</string>
+    <string name="notif_stage_denoise">去噪 %1$d/%2$d</string>
+    <string name="notif_stage_vae">VAE 解码</string>
+    <string name="notif_channel_gen">图像生成</string>
+    <string name="notif_channel_dl">模型下载</string>
+</resources>

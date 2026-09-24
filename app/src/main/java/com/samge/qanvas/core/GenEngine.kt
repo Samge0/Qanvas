@@ -1,7 +1,6 @@
 package com.samge.qanvas.core
 
 import android.content.Context
-import android.graphics.Bitmap
 import com.scsonic.qwenimage21.ModelDownloader
 import com.scsonic.qwenimage21.QwenImage21
 import java.io.File
@@ -16,9 +15,25 @@ import java.io.File
 object GenEngine {
 
     const val MODEL_DIR_NAME = "qwen_image21"
-    const val REQUIRED_BYTES: Long = 11_000_000_000L // ~10.3 GB download, ~11 GB installed
+    const val REQUIRED_BYTES: Long = 11_000_000_000L // ~10.6 GB download, ~11 GB installed
+    const val PREFS_NAME = "qanvas"
+    const val KEY_MODEL_DIR = "model_dir"
+    const val KEY_PROXY_ENABLED = "proxy_enabled"
+    const val KEY_PROXY_HOST = "proxy_host"
+    const val KEY_PROXY_PORT = "proxy_port"
 
-    fun modelDir(context: Context): File = File(context.getExternalFilesDir(null), MODEL_DIR_NAME)
+    fun prefs(context: Context) =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    /** Effective model directory: user override or the default app-private external dir. */
+    fun modelDir(context: Context): File {
+        val custom = prefs(context).getString(KEY_MODEL_DIR, null)
+        if (!custom.isNullOrBlank()) {
+            val f = File(custom)
+            if (f.isDirectory && f.canWrite()) return f
+        }
+        return File(context.getExternalFilesDir(null), MODEL_DIR_NAME)
+    }
 
     fun missingFiles(context: Context): String? = QwenImage21.missingFiles(modelDir(context))
 
@@ -30,22 +45,41 @@ object GenEngine {
     fun ramOk(): Boolean = availableMemoryMB() >= 10_500
 
     fun freeStorageBytes(context: Context): Long =
-        context.getExternalFilesDir(null)?.usableSpace ?: 0L
+        modelDir(context).parentFile?.usableSpace
+            ?: context.getExternalFilesDir(null)?.usableSpace ?: 0L
+
+    /** Proxy settings from prefs, or null when disabled/incomplete. */
+    fun proxy(context: Context): Pair<String, Int>? {
+        val p = prefs(context)
+        if (!p.getBoolean(KEY_PROXY_ENABLED, false)) return null
+        val host = p.getString(KEY_PROXY_HOST, "")?.trim().orEmpty()
+        val port = p.getInt(KEY_PROXY_PORT, -1)
+        return if (host.isNotEmpty() && port in 1..65535) host to port else null
+    }
+
+    /** Total bytes of downloaded model files in the effective dir. */
+    fun modelBytes(context: Context): Long =
+        modelDir(context).walkTopDown().filter { it.isFile }.sumOf { it.length() }
+
+    /** Delete every model file; returns bytes freed. */
+    fun deleteModels(context: Context): Long {
+        val dir = modelDir(context)
+        val freed = modelBytes(context)
+        dir.deleteRecursively()
+        return freed
+    }
 
     fun makeDownloader(): ModelDownloader = ModelDownloader()
 
     /**
-     * Progress percent → human stage label. The engine reports:
-     *  0-10 prefix/text encoder, ~10-85 DiT steps, 85-100 VAE decode.
+     * Progress percent → human stage label (i18n happens in the UI layer).
+     * 0-10 prefix/text encoder, ~10-85 DiT steps, 85-100 VAE decode.
      */
-    fun stageLabel(percent: Int, steps: Int): String = when {
-        percent <= 4 -> "Loading stages"
-        percent <= 10 -> "Text encoder"
-        percent < 85 -> {
-            val done = ((percent - 10).coerceAtLeast(0) / 75.0 * steps).toInt().coerceAtMost(steps)
-            "Denoising $done/$steps"
-        }
-        else -> "VAE decode"
+    fun stageKind(percent: Int): String = when {
+        percent <= 4 -> "load"
+        percent <= 10 -> "te"
+        percent < 85 -> "denoise"
+        else -> "vae"
     }
 
     /** Estimated seconds for the given size/tier/steps (SD8Gen2-class device baseline). */

@@ -12,6 +12,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.samge.qanvas.MainActivity
 import com.samge.qanvas.QanvasApp
+import com.samge.qanvas.R
 import com.samge.qanvas.data.GenRecord
 import com.scsonic.qwenimage21.ModelDownloader
 import com.scsonic.qwenimage21.QwenImage21
@@ -154,6 +155,14 @@ class GenService : Service() {
         running = true
         job = scope.launch {
             try {
+                // user-configurable HTTP proxy (Settings), default = system resolver
+                val proxy = GenEngine.proxy(this@GenService)
+                if (proxy != null) {
+                    System.setProperty("proxyHost", proxy.first)
+                    System.setProperty("proxyPort", proxy.second.toString())
+                    System.setProperty("https.proxyHost", proxy.first)
+                    System.setProperty("https.proxyPort", proxy.second.toString())
+                }
                 val d = ModelDownloader()
                 downloader = d
                 d.download(GenEngine.modelDir(this@GenService)) { file, done, total ->
@@ -208,13 +217,18 @@ class GenService : Service() {
                     threads = 4
                     crashMarkerFile = File(filesDir, "generation_in_progress.txt")
                 }
-                GenBus.post(GenBus.State(GenBus.Kind.LOADING, stage = "Loading stages"))
+                GenBus.post(GenBus.State(GenBus.Kind.LOADING, stage = "load"))
                 QwenImage21(GenEngine.modelDir(this@GenService), opts).use { qi ->
-                    val listener = QwenImage21.ProgressListener { p ->
-                        val stage = GenEngine.stageLabel(p, steps)
-                        notifyProgress(NOTIF_GEN, CH_GEN, stage, "$p%", p)
-                        GenBus.post(GenBus.State(GenBus.Kind.GENERATING, p, stage))
-                    }
+                val listener = QwenImage21.ProgressListener { p ->
+                    notifyProgress(NOTIF_GEN, CH_GEN, GenEngine.stageKind(p), "$p%", p)
+                    GenBus.post(
+                        GenBus.State(
+                            GenBus.Kind.GENERATING, p,
+                            stageKey = GenEngine.stageKind(p),
+                            stageStep = ((p - 10).coerceAtLeast(0) / 75.0 * steps).toInt().coerceAtMost(steps),
+                        )
+                    )
+                }
                     when (mode) {
                         "edit" -> {
                             val tiers = QwenImage21SizeProxy.TIERS
@@ -283,12 +297,19 @@ class GenService : Service() {
             .build()
     }
 
-    private fun notifyProgress(id: Int, channel: String, text: String, sub: String, pct: Int) {
+    private fun notifyProgress(id: Int, channel: String, stageKey: String, sub: String, pct: Int) {
+        val text = when (stageKey) {
+            "dl" -> getString(R.string.notif_downloading)
+            "load" -> getString(R.string.notif_stage_load)
+            "te" -> getString(R.string.notif_stage_te)
+            "vae" -> getString(R.string.notif_stage_vae)
+            else -> getString(R.string.notif_generating)
+        }
         notifMgr.notify(
             id,
             NotificationCompat.Builder(this, channel)
                 .setSmallIcon(android.R.drawable.ic_menu_gallery)
-                .setContentTitle("Qanvas")
+                .setContentTitle(getString(R.string.notif_title))
                 .setContentText(text)
                 .setSubText(sub)
                 .setOngoing(true)

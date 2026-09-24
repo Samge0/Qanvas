@@ -1,13 +1,14 @@
 package com.samge.qanvas.ui
 
-import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,9 +16,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
@@ -25,13 +28,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.PhotoLibrary
@@ -43,14 +45,16 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SecondaryTabRow
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -70,68 +74,87 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.samge.qanvas.R
 import com.samge.qanvas.core.GenBus
 import com.samge.qanvas.core.GenEngine
+import com.samge.qanvas.core.GenService
 import com.samge.qanvas.core.Inspo
+import com.samge.qanvas.core.QwenImage21SizeProxy
 import com.samge.qanvas.data.GenRecord
 import com.samge.qanvas.ui.theme.AppleTokens
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+private val TAB_KEYS = listOf(R.string.tab_create, R.string.tab_sticker, R.string.tab_edit, R.string.tab_gallery, R.string.tab_inspo, R.string.tab_settings)
+
 // ==================================================================== root / nav
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun QanvasRoot(vm: MainViewModel) {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val gate by vm.gate.collectAsState()
     val gen by vm.gen.collectAsState()
+    val toastMsg by vm.toast.collectAsState()
+    val snackbar = remember { SnackbarHostState() }
+    val ctx = LocalContext.current
 
-    Scaffold(topBar = { QanvasTopBar(gate) }) { pad ->
+    // toast keys → localized snackbar
+    LaunchedEffect(toastMsg) {
+        when (toastMsg) {
+            "__need_download__" -> snackbar.showSnackbar(ctx.getString(R.string.toast_need_download))
+            "__dir_invalid__" -> snackbar.showSnackbar(ctx.getString(R.string.toast_dir_invalid))
+            "__dir_applied__" -> snackbar.showSnackbar(ctx.getString(R.string.toast_dir_applied))
+            "__migrate_done__" -> snackbar.showSnackbar(ctx.getString(R.string.toast_migrate_done))
+        }
+        if (toastMsg != null) vm.toastShown()
+    }
+
+    Scaffold(
+        topBar = { QanvasTopBar(gate, onSettings = { tab = 5 }) },
+        snackbarHost = { SnackbarHost(snackbar) },
+    ) { pad ->
         Column(Modifier.padding(pad).fillMaxSize()) {
-            if (!gate.modelPresent && gen.kind != GenBus.Kind.DOWNLOADING) {
-                GateScreen(vm, gate, gen)
-            } else {
-                SecondaryTabRow(selectedTabIndex = tab) {
-                    listOf("Create", "Sticker", "Edit", "Gallery", "Inspo").forEachIndexed { i, label ->
-                        Tab(
-                            selected = tab == i,
-                            onClick = { tab = i },
-                            text = { Text(label, style = MaterialTheme.typography.labelMedium) },
-                        )
-                    }
+            SecondaryTabRow(selectedTabIndex = tab) {
+                TAB_KEYS.forEachIndexed { i, res ->
+                    Tab(
+                        selected = tab == i,
+                        onClick = { tab = i },
+                        text = { Text(stringResource(res), style = MaterialTheme.typography.labelMedium) },
+                    )
                 }
-                when (tab) {
-                    0 -> CreateTab(vm, gen)
-                    1 -> StickerTab(vm, gen)
-                    2 -> EditTab(vm, gen)
-                    3 -> GalleryTab(vm)
-                    4 -> InspoTab()
-                }
+            }
+            when (tab) {
+                0 -> if (gate.modelPresent) CreateTab(vm, gen) else MissingModelGate(vm)
+                1 -> if (gate.modelPresent) StickerTab(vm, gen) else MissingModelGate(vm)
+                2 -> if (gate.modelPresent) EditTab(vm, gen) else MissingModelGate(vm)
+                3 -> GalleryTab(vm)
+                4 -> InspoTab()
+                5 -> SettingsTab(vm, gen)
             }
         }
     }
 }
 
 @Composable
-private fun QanvasTopBar(gate: com.samge.qanvas.ui.GateStatus) {
+private fun QanvasTopBar(gate: GateStatus, onSettings: () -> Unit) {
     Surface(color = MaterialTheme.colorScheme.background) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
+            Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
-                Modifier
-                    .size(30.dp)
-                    .clip(CircleShape)
+                Modifier.size(30.dp).clip(CircleShape)
                     .background(Brush.linearGradient(listOf(AppleTokens.Violet, AppleTokens.ActionBlue))),
                 contentAlignment = Alignment.Center,
             ) {
@@ -141,7 +164,7 @@ private fun QanvasTopBar(gate: com.samge.qanvas.ui.GateStatus) {
             Column {
                 Text("Qanvas", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Qwen-Image-2.1 · 7B · on-device",
+                    stringResource(R.string.top_subtitle),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -149,91 +172,114 @@ private fun QanvasTopBar(gate: com.samge.qanvas.ui.GateStatus) {
             Spacer(Modifier.weight(1f))
             if (gate.modelPresent) {
                 Icon(
-                    Icons.Filled.CheckCircle, null,
+                    Icons.Filled.CheckCircle, stringResource(R.string.model_ready),
                     tint = AppleTokens.Green, modifier = Modifier.size(18.dp),
                 )
-                Spacer(Modifier.width(4.dp))
+                Spacer(Modifier.width(6.dp))
                 Text(
-                    "Model ready",
+                    stringResource(R.string.model_ready),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            } else {
+                Icon(
+                    Icons.Filled.Warning, stringResource(R.string.model_missing),
+                    tint = AppleTokens.Orange, modifier = Modifier.size(18.dp),
+                )
+            }
+            Spacer(Modifier.width(6.dp))
+            IconButton(onClick = onSettings) {
+                Icon(Icons.Filled.Settings, stringResource(R.string.tab_settings))
             }
         }
     }
 }
 
-// ==================================================================== gate / download
+// ==================================================================== shared controls
 
+/** Full-page redirect for Create/Sticker/Edit when the model isn't installed yet. */
 @Composable
-fun GateScreen(vm: MainViewModel, gate: GateStatus, gen: GenBus.State) {
+fun MissingModelGate(vm: MainViewModel) {
+    val gate by vm.gate.collectAsState()
+    val gen by vm.gen.collectAsState()
+    val dl = gen.kind == GenBus.Kind.DOWNLOADING
+
     LazyColumn(
         Modifier.fillMaxSize().padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {
-            Spacer(Modifier.height(12.dp))
-            Text("Private AI art studio,\nentirely on your phone.",
-                style = MaterialTheme.typography.headlineSmall, lineHeight = 28.sp)
+            Spacer(Modifier.height(16.dp))
+            Text(
+                stringResource(R.string.home_title),
+                style = MaterialTheme.typography.headlineSmall, lineHeight = 28.sp,
+            )
             Spacer(Modifier.height(6.dp))
             Text(
-                "Qwen-Image-2.1 · 7B diffusion transformer, int4 on OpenCL. No cloud, no upload, no account — your photos never leave the device.",
+                stringResource(R.string.home_desc),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                FeaturePill(Icons.Filled.Palette, "Text → Image")
-                FeaturePill(Icons.Filled.Edit, "Photo Editing")
-                FeaturePill(Icons.Filled.Category, "RGBA Stickers")
+                FeaturePill(Icons.Filled.Palette, stringResource(R.string.feature_t2i))
+                FeaturePill(Icons.Filled.Edit, stringResource(R.string.feature_edit))
+                FeaturePill(Icons.Filled.Star, stringResource(R.string.feature_sticker))
             }
         }
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 shape = RoundedCornerShape(18.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
             ) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("One-time model setup", style = MaterialTheme.typography.titleMedium)
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(stringResource(R.string.gate_title), style = MaterialTheme.typography.titleMedium)
                     GateRow(
                         ok = true,
-                        label = "RAM ${if (gate.ramMB > 0) "${gate.ramMB / 1024.0} GB".let { String.format(Locale.US, "%.1f", gate.ramMB / 1024.0) + " GB" } else "…"}",
-                        note = if (gate.ramOk) "recommended class" else "12 GB+ recommended — use Fast/Tiny tiers",
+                        label = stringResource(
+                            R.string.ram_fmt,
+                            if (gate.ramMB > 0) String.format(Locale.US, "%.1f", gate.ramMB / 1024.0) + " GB" else "…",
+                        ),
+                        note = stringResource(if (gate.ramOk) R.string.ram_ok else R.string.ram_low),
                         icon = { Icon(Icons.Filled.Memory, null, tint = it) },
                     )
                     GateRow(
                         ok = gate.storageOk,
-                        label = "Free storage ${
-                            String.format(Locale.US, "%.1f", gate.freeBytes / 1e9)
-                        } / 11 GB needed",
-                        note = if (gate.storageOk) "enough space" else "free up space to continue",
+                        label = stringResource(
+                            R.string.storage_fmt,
+                            String.format(Locale.US, "%.1f", gate.freeBytes / 1e9),
+                        ),
+                        note = stringResource(if (gate.storageOk) R.string.storage_ok else R.string.storage_low),
                         icon = { Icon(Icons.Filled.CheckCircle, null, tint = it) },
                     )
                     Text(
-                        "Model download ~10.3 GB from Hugging Face · resumable · checksum-verified. Wi-Fi strongly recommended.",
+                        stringResource(R.string.gate_desc),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
         }
-        if (gen.kind == GenBus.Kind.DOWNLOADING) {
+        if (dl) {
             item {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     shape = RoundedCornerShape(18.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                 ) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                             Spacer(Modifier.width(10.dp))
-                            Text("Downloading… ${gen.progress}%", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                stringResource(R.string.notif_downloading) + " ${gen.progress}%",
+                                style = MaterialTheme.typography.titleMedium,
+                            )
                             Spacer(Modifier.weight(1f))
-                            TextButton(onClick = { com.samge.qanvas.core.GenService.requestStop(vm.getApplication()) }) {
-                                Text("Stop")
+                            TextButton(onClick = { GenService.requestStop(vm.getApplication()) }) {
+                                Text(stringResource(R.string.set_download_stop))
                             }
                         }
                         LinearProgressIndicator(
@@ -241,7 +287,7 @@ fun GateScreen(vm: MainViewModel, gate: GateStatus, gen: GenBus.State) {
                             modifier = Modifier.fillMaxWidth(),
                         )
                         Text(
-                            "${gen.stage}\n${gen.detail}",
+                            gen.detail,
                             style = MaterialTheme.typography.bodySmall,
                             fontFamily = FontFamily.Monospace,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -253,35 +299,34 @@ fun GateScreen(vm: MainViewModel, gate: GateStatus, gen: GenBus.State) {
         item {
             Button(
                 onClick = { vm.startDownload() },
-                enabled = gen.kind != GenBus.Kind.DOWNLOADING,
+                enabled = !dl,
                 shape = RoundedCornerShape(999.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = AppleTokens.ActionBlue),
                 modifier = Modifier.fillMaxWidth().height(52.dp),
             ) {
                 Icon(Icons.Filled.AutoAwesome, null, Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Download model · 10.3 GB", fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.set_download_btn), fontWeight = FontWeight.Medium)
             }
         }
         item {
             OutlinedButton(
-                onClick = { /* placeholder — wired in CreateTab via vm */ },
+                onClick = { },
+                enabled = false,
                 shape = RoundedCornerShape(999.dp),
                 modifier = Modifier.fillMaxWidth().height(48.dp),
-                enabled = false,
-            ) {
-                Text("Push models via adb instead (see README)")
-            }
+            ) { Text("adb push → " + GenEngine.MODEL_DIR_NAME) }
         }
+        item { Spacer(Modifier.height(30.dp)) }
     }
 }
 
 @Composable
-private fun FeaturePill(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String) {
+private fun FeaturePill(icon: ImageVector, label: String) {
     Surface(
         shape = RoundedCornerShape(999.dp),
         color = AppleTokens.VioletSoft,
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x1A6C5CE7)),
+        border = BorderStroke(1.dp, Color(0x1A6C5CE7)),
     ) {
         Row(
             Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
@@ -299,95 +344,84 @@ private fun GateRow(ok: Boolean, label: String, note: String, icon: @Composable 
     Row(verticalAlignment = Alignment.CenterVertically) {
         val tint = if (ok) AppleTokens.Green else AppleTokens.Orange
         Box(
-            Modifier.size(34.dp).clip(RoundedCornerShape(10.dp))
-                .background(tint.copy(alpha = 0.12f)),
+            Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(tint.copy(alpha = 0.12f)),
             contentAlignment = Alignment.Center,
         ) { icon(tint) }
         Spacer(Modifier.width(10.dp))
         Column {
             Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-            Text(
-                note, style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Text(note, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
 
-// ==================================================================== shared controls
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun RatioTierPicker(vm: MainViewModel, ratioLabels: Array<String>, tierNotes: Array<String>) {
+fun RatioTierPicker(vm: MainViewModel) {
     val ratio by vm.ratioOrdinal.collectAsState()
     val tier by vm.tierOrdinal.collectAsState()
-    Text("Aspect ratio", style = MaterialTheme.typography.labelMedium)
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-        ratioLabels.forEachIndexed { i, lbl ->
+    Text(stringResource(R.string.ratio_label), style = MaterialTheme.typography.labelMedium)
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        listOf("1:1", "4:3", "3:4", "3:2", "2:3", "16:9", "9:16").forEachIndexed { i, lbl ->
             FilterChip(
                 selected = ratio == i,
                 onClick = { vm.ratioOrdinal.value = i },
                 label = { Text(lbl, style = MaterialTheme.typography.labelMedium) },
                 shape = RoundedCornerShape(999.dp),
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = AppleTokens.ActionBlue.copy(alpha = 0.12f),
-                    selectedLabelColor = AppleTokens.ActionBlue,
-                ),
             )
         }
     }
-    Spacer(Modifier.height(6.dp))
-    Text("Quality tier", style = MaterialTheme.typography.labelMedium)
+    Spacer(Modifier.height(4.dp))
+    Text(stringResource(R.string.tier_label), style = MaterialTheme.typography.labelMedium)
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        tierNotes.forEachIndexed { i, lbl ->
+        listOf(R.string.tier_standard, R.string.tier_fast, R.string.tier_tiny).forEachIndexed { i, res ->
             FilterChip(
                 selected = tier == i,
                 onClick = { vm.tierOrdinal.value = i },
-                label = { Text(lbl, style = MaterialTheme.typography.labelMedium) },
+                label = { Text(stringResource(res), style = MaterialTheme.typography.labelMedium) },
                 shape = RoundedCornerShape(999.dp),
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = AppleTokens.ActionBlue.copy(alpha = 0.12f),
-                    selectedLabelColor = AppleTokens.ActionBlue,
-                ),
             )
         }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun StepsSeedRow(vm: MainViewModel, tokensHint: String) {
+fun StepsSeedRow(vm: MainViewModel, hint: String) {
     val steps by vm.steps.collectAsState()
     val seed by vm.seedText.collectAsState()
-    Row(
-        Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    Text(stringResource(R.string.steps_label), style = MaterialTheme.typography.labelMedium)
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Column(Modifier.weight(1f)) {
-            Text("Steps", style = MaterialTheme.typography.labelMedium)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(12, 16, 20, 28).forEach { s ->
-                    FilterChip(
-                        selected = steps == s,
-                        onClick = { vm.steps.value = s },
-                        label = { Text("$s") },
-                        shape = RoundedCornerShape(999.dp),
-                    )
-                }
-            }
-        }
-        Column(Modifier.width(120.dp)) {
-            Text("Seed", style = MaterialTheme.typography.labelMedium)
-            var txt by remember(seed) { mutableStateOf(seed ?: "42") }
-            androidx.compose.material3.OutlinedTextField(
-                value = txt,
-                onValueChange = { txt = it; vm.seedText.value = it },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                textStyle = MaterialTheme.typography.bodyMedium,
+        listOf(12, 16, 20, 28).forEach { s ->
+            FilterChip(
+                selected = steps == s,
+                onClick = { vm.steps.value = s },
+                label = { Text("$s") },
+                shape = RoundedCornerShape(999.dp),
             )
         }
     }
+    Spacer(Modifier.height(4.dp))
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(stringResource(R.string.seed_label), style = MaterialTheme.typography.labelMedium)
+        OutlinedTextField(
+            value = seed,
+            onValueChange = { vm.seedText.value = it.filter { c -> c.isDigit() }.take(9) },
+            modifier = Modifier.width(140.dp).height(52.dp),
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium,
+            shape = RoundedCornerShape(12.dp),
+        )
+    }
     Text(
-        tokensHint,
+        hint,
         style = MaterialTheme.typography.bodySmall,
         fontFamily = FontFamily.Monospace,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -396,16 +430,24 @@ fun StepsSeedRow(vm: MainViewModel, tokensHint: String) {
 
 @Composable
 fun ProgressCard(gen: GenBus.State, estimateSec: Int) {
+    val stageText = when (gen.stageKey.ifEmpty { gen.stage }) {
+        "load" -> stringResource(R.string.notif_stage_load)
+        "te" -> stringResource(R.string.notif_stage_te)
+        "vae" -> stringResource(R.string.notif_stage_vae)
+        "denoise" -> stringResource(R.string.notif_stage_denoise, gen.stageStep, 20)
+        "" -> stringResource(R.string.progress_preparing)
+        else -> gen.stage // download filename
+    }
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(18.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
                 Spacer(Modifier.width(10.dp))
-                Text(gen.stage.ifEmpty { "Preparing…" }, style = MaterialTheme.typography.titleMedium)
+                Text(stageText, style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.weight(1f))
                 Text("${gen.progress}%", style = MaterialTheme.typography.titleMedium, color = AppleTokens.ActionBlue)
             }
@@ -414,7 +456,7 @@ fun ProgressCard(gen: GenBus.State, estimateSec: Int) {
                 modifier = Modifier.fillMaxWidth(),
             )
             Text(
-                "~${estimateSec / 60} min on SD 8 Gen 2-class hardware · notification keeps progress when you leave",
+                stringResource(R.string.progress_note_fmt, estimateSec / 60),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -427,30 +469,27 @@ fun ResultCard(bitmap: android.graphics.Bitmap?, checker: Boolean = false) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(18.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
     ) {
         Column(Modifier.padding(12.dp)) {
             Box(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                Modifier.fillMaxWidth()
+                    .height(240.dp)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(if (checker) Color(0xFFE8E8ED) else MaterialTheme.colorScheme.surfaceVariant)
-                    .border(
-                        1.dp,
-                        if (checker) Color(0xFFD5D5DC) else MaterialTheme.colorScheme.outline,
-                        RoundedCornerShape(12.dp),
-                    ),
+                    .border(1.dp, if (checker) Color(0xFFD5D5DC) else MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center,
             ) {
                 if (bitmap != null) {
                     Image(
                         bitmap = bitmap.asImageBitmap(),
                         contentDescription = null,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Fit,
                     )
                 } else {
                     Text(
-                        "Result appears here",
-                        Modifier.padding(40.dp),
+                        stringResource(R.string.result_placeholder),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -469,6 +508,7 @@ fun CreateTab(vm: MainViewModel, gen: GenBus.State) {
     val steps by vm.steps.collectAsState()
     val result by vm.result.collectAsState()
     var prompt by rememberSaveable { mutableStateOf("") }
+    val modelReady = vm.gate.collectAsState().value.modelPresent
 
     LazyColumn(
         Modifier.fillMaxSize().padding(horizontal = 20.dp),
@@ -476,53 +516,51 @@ fun CreateTab(vm: MainViewModel, gen: GenBus.State) {
     ) {
         item {
             Spacer(Modifier.height(8.dp))
-            PromptField(prompt, { prompt = it }, "Describe the image…  e.g. \"A neon sign that reads QWEN, rainy night\"")
-        }
-        item {
-            RatioTierPicker(
-                vm,
-                arrayOf("1:1", "4:3", "3:4", "3:2", "2:3", "16:9", "9:16"),
-                arrayOf("Standard", "Fast", "Tiny"),
+            OutlinedTextField(
+                value = prompt,
+                onValueChange = { prompt = it },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 3,
+                placeholder = { Text(stringResource(R.string.create_placeholder), style = MaterialTheme.typography.bodyMedium) },
+                shape = RoundedCornerShape(14.dp),
             )
         }
+        item { RatioTierPicker(vm) }
         item {
-            val size = com.samge.qanvas.core.QwenImage21SizeProxy.of(ratio, tier)
+            val size = QwenImage21SizeProxy.of(ratio, tier)
             StepsSeedRow(
                 vm,
-                "Output ${size.width}×${size.height} · ${size.tokens()} latent tokens/step · ~${
-                    GenEngine.estimateSeconds(size.tokens(), steps) / 60
-                } min est.",
+                stringResource(R.string.size_fmt, size.width, size.height, size.tokens(), GenEngine.estimateSeconds(size.tokens(), steps) / 60),
             )
         }
         item {
             GenerateButton(
-                enabled = prompt.isNotBlank() && !GenServiceRunning(gen),
+                enabled = prompt.isNotBlank() && !GenServiceRunning(gen) && modelReady,
                 running = GenServiceRunning(gen),
+                modelReady = modelReady,
             ) { vm.startGeneration(prompt, "t2i", null) }
         }
         if (GenServiceRunning(gen)) {
             item {
-                val size = com.samge.qanvas.core.QwenImage21SizeProxy.of(ratio, tier)
+                val size = QwenImage21SizeProxy.of(ratio, tier)
                 ProgressCard(gen, GenEngine.estimateSeconds(size.tokens(), steps))
             }
         }
-        if (gen.kind == GenBus.Kind.OOM) {
-            item { OomCard() }
-        }
-        if (gen.kind == GenBus.Kind.ERROR) {
-            item { ErrorCard(gen.error ?: "unknown") }
-        }
+        if (gen.kind == GenBus.Kind.OOM) item { OomCard() }
+        if (gen.kind == GenBus.Kind.ERROR) item { ErrorCard(gen.error ?: "unknown") }
         item { ResultCard(result) }
         item { Spacer(Modifier.height(30.dp)) }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun StickerTab(vm: MainViewModel, gen: GenBus.State) {
     val ratio by vm.ratioOrdinal.collectAsState()
     val tier by vm.tierOrdinal.collectAsState()
     val steps by vm.steps.collectAsState()
     val result by vm.result.collectAsState()
+    val modelReady = vm.gate.collectAsState().value.modelPresent
     var prompt by rememberSaveable { mutableStateOf(Inspo.byKind(Inspo.Kind.STICKER).first().prompt) }
 
     LazyColumn(
@@ -531,47 +569,46 @@ fun StickerTab(vm: MainViewModel, gen: GenBus.State) {
     ) {
         item {
             Spacer(Modifier.height(8.dp))
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = AppleTokens.VioletSoft,
-            ) {
-                Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(shape = RoundedCornerShape(14.dp), color = AppleTokens.VioletSoft) {
+                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.Star, null, Modifier.size(16.dp), tint = AppleTokens.Violet)
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "Native RGBA transparency — unique to Qwen-Image-2.1 on-device. Exports real transparent PNG stickers.",
+                        stringResource(R.string.sticker_tip),
                         style = MaterialTheme.typography.bodySmall,
                         color = AppleTokens.Violet,
                     )
                 }
             }
         }
-        item { PromptField(prompt, { prompt = it }, "Sticker subject…  keep the RGBA template text") }
         item {
-            RatioTierPicker(
-                vm,
-                arrayOf("1:1", "4:3", "3:4", "3:2", "2:3", "16:9", "9:16"),
-                arrayOf("Standard", "Fast", "Tiny"),
+            OutlinedTextField(
+                value = prompt,
+                onValueChange = { prompt = it },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 3,
+                placeholder = { Text(stringResource(R.string.sticker_placeholder), style = MaterialTheme.typography.bodyMedium) },
+                shape = RoundedCornerShape(14.dp),
             )
         }
+        item { RatioTierPicker(vm) }
         item {
-            val size = com.samge.qanvas.core.QwenImage21SizeProxy.of(ratio, tier)
+            val size = QwenImage21SizeProxy.of(ratio, tier)
             StepsSeedRow(
                 vm,
-                "Output ${size.width}×${size.height} · ${size.tokens()} tokens/step · ~${
-                    GenEngine.estimateSeconds(size.tokens(), steps) / 60
-                } min est.",
+                stringResource(R.string.size_fmt, size.width, size.height, size.tokens(), GenEngine.estimateSeconds(size.tokens(), steps) / 60),
             )
         }
         item {
             GenerateButton(
-                enabled = prompt.isNotBlank() && !GenServiceRunning(gen),
+                enabled = prompt.isNotBlank() && !GenServiceRunning(gen) && modelReady,
                 running = GenServiceRunning(gen),
+                modelReady = modelReady,
             ) { vm.startGeneration(prompt, "t2i", null) }
         }
         if (GenServiceRunning(gen)) {
             item {
-                val size = com.samge.qanvas.core.QwenImage21SizeProxy.of(ratio, tier)
+                val size = QwenImage21SizeProxy.of(ratio, tier)
                 ProgressCard(gen, GenEngine.estimateSeconds(size.tokens(), steps))
             }
         }
@@ -582,12 +619,13 @@ fun StickerTab(vm: MainViewModel, gen: GenBus.State) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditTab(vm: MainViewModel, gen: GenBus.State) {
     val editInput by vm.editInput.collectAsState()
     val tier by vm.tierOrdinal.collectAsState()
     val steps by vm.steps.collectAsState()
+    val result by vm.result.collectAsState()
+    val modelReady = vm.gate.collectAsState().value.modelPresent
     var prompt by rememberSaveable { mutableStateOf("") }
     val pick = androidx.activity.compose.rememberLauncherForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.GetContent()
@@ -599,34 +637,30 @@ fun EditTab(vm: MainViewModel, gen: GenBus.State) {
     ) {
         item {
             Spacer(Modifier.height(8.dp))
-            Text("AI photo editing", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.edit_title), style = MaterialTheme.typography.titleMedium)
             Text(
-                "Pick a photo, describe the change. Output keeps the input's aspect ratio at the tier budget.",
+                stringResource(R.string.edit_desc),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         item {
-            // input picker / preview
             if (editInput == null) {
                 Surface(
                     onClick = { pick.launch("image/*") },
                     shape = RoundedCornerShape(18.dp),
                     color = MaterialTheme.colorScheme.surface,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                 ) {
                     Column(
                         Modifier.fillMaxWidth().padding(28.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Icon(
-                            Icons.Outlined.PhotoLibrary, null,
-                            Modifier.size(36.dp), tint = AppleTokens.ActionBlue,
-                        )
+                        Icon(Icons.Outlined.PhotoLibrary, null, Modifier.size(36.dp), tint = AppleTokens.ActionBlue)
                         Spacer(Modifier.height(8.dp))
-                        Text("Choose a photo to edit", style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.edit_pick_title), style = MaterialTheme.typography.bodyMedium)
                         Text(
-                            "stays on your device — never uploaded",
+                            stringResource(R.string.edit_pick_sub),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -636,24 +670,22 @@ fun EditTab(vm: MainViewModel, gen: GenBus.State) {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     shape = RoundedCornerShape(18.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                 ) {
-                    Column(Modifier.padding(12.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                "Input ${editInput!!.width}×${editInput!!.height}",
+                                stringResource(R.string.edit_input_fmt, editInput!!.width, editInput!!.height),
                                 style = MaterialTheme.typography.bodySmall,
                             )
                             Spacer(Modifier.weight(1f))
-                            IconButton(onClick = { vm.clearEditImage() }) {
-                                Icon(Icons.Filled.Delete, "Remove", Modifier.size(18.dp))
+                            TextButton(onClick = { vm.clearEditImage() }) {
+                                Text(stringResource(R.string.edit_remove))
                             }
                         }
-                        val out = com.samge.qanvas.core.QwenImage21SizeProxy.editSize(
-                            editInput!!.width, editInput!!.height, tier,
-                        )
+                        val out = QwenImage21SizeProxy.editSize(editInput!!.width, editInput!!.height, tier)
                         Text(
-                            "→ output ${out[0]}×${out[1]} at this tier",
+                            stringResource(R.string.edit_output_fmt, out[0], out[1]),
                             style = MaterialTheme.typography.bodySmall,
                             fontFamily = FontFamily.Monospace,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -663,16 +695,22 @@ fun EditTab(vm: MainViewModel, gen: GenBus.State) {
             }
         }
         item {
-            PromptField(prompt, { prompt = it }, "Describe the edit…  e.g. \"Change the background to a sunset beach\"")
+            OutlinedTextField(
+                value = prompt,
+                onValueChange = { prompt = it },
+                modifier = Modifier.fillMaxWidth(),
+                minLines = 3,
+                placeholder = { Text(stringResource(R.string.edit_placeholder), style = MaterialTheme.typography.bodyMedium) },
+                shape = RoundedCornerShape(14.dp),
+            )
         }
         item {
-            // Fast-default hint (D2 decision): Fast keeps faces better
             Surface(shape = RoundedCornerShape(14.dp), color = AppleTokens.VioletSoft) {
-                Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Filled.Bolt, null, Modifier.size(16.dp), tint = AppleTokens.Violet)
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "Tip: Fast tier keeps faces & identity better than Standard (measured upstream); it's the default here.",
+                        stringResource(R.string.fast_tip),
                         style = MaterialTheme.typography.bodySmall,
                         color = AppleTokens.Violet,
                     )
@@ -680,34 +718,32 @@ fun EditTab(vm: MainViewModel, gen: GenBus.State) {
             }
         }
         item {
-            Text("Pixel budget", style = MaterialTheme.typography.labelMedium)
+            Text(stringResource(R.string.pixel_budget_label), style = MaterialTheme.typography.labelMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                arrayOf("Standard", "Fast", "Tiny").forEachIndexed { i, lbl ->
-                    val t by vm.tierOrdinal.collectAsState()
+                listOf(R.string.tier_standard, R.string.tier_fast, R.string.tier_tiny).forEachIndexed { i, res ->
                     FilterChip(
-                        selected = t == i,
+                        selected = tier == i,
                         onClick = { vm.tierOrdinal.value = i },
-                        label = { Text(lbl) },
+                        label = { Text(stringResource(res)) },
                         shape = RoundedCornerShape(999.dp),
                     )
                 }
             }
         }
-        item {
-            StepsSeedRow(vm, "~${com.samge.qanvas.core.GenEngine.estimateSeconds(800, steps) / 60}+ min est. for edits")
-        }
+        item { StepsSeedRow(vm, stringResource(R.string.edit_est_fmt, GenEngine.estimateSeconds(800, steps) / 60)) }
         item {
             GenerateButton(
-                enabled = editInput != null && prompt.isNotBlank() && !GenServiceRunning(gen),
+                enabled = editInput != null && prompt.isNotBlank() && !GenServiceRunning(gen) && modelReady,
                 running = GenServiceRunning(gen),
+                modelReady = modelReady,
             ) { vm.startGeneration(prompt, "edit", editInput) }
         }
         if (GenServiceRunning(gen)) {
-            item { ProgressCard(gen, com.samge.qanvas.core.GenEngine.estimateSeconds(800, steps)) }
+            item { ProgressCard(gen, GenEngine.estimateSeconds(800, steps)) }
         }
         if (gen.kind == GenBus.Kind.OOM) item { OomCard() }
         if (gen.kind == GenBus.Kind.ERROR) item { ErrorCard(gen.error ?: "unknown") }
-        item { ResultCard(vm.result.collectAsState().value) }
+        item { ResultCard(result) }
         item { Spacer(Modifier.height(30.dp)) }
     }
 }
@@ -725,14 +761,11 @@ fun GalleryTab(vm: MainViewModel) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            Icon(
-                Icons.Outlined.PhotoLibrary, null, Modifier.size(44.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Icon(Icons.Outlined.PhotoLibrary, null, Modifier.size(44.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(10.dp))
-            Text("No creations yet", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.gallery_empty_title), style = MaterialTheme.typography.titleMedium)
             Text(
-                "Generated images land here with full parameters",
+                stringResource(R.string.gallery_empty_sub),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -740,7 +773,7 @@ fun GalleryTab(vm: MainViewModel) {
         return
     }
 
-    val fmt = SimpleDateFormat("MM/dd HH:mm", Locale.getDefault())
+    val fmt = remember { SimpleDateFormat("MM/dd HH:mm", Locale.getDefault()) }
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         Modifier.fillMaxSize().padding(horizontal = 20.dp),
@@ -751,9 +784,9 @@ fun GalleryTab(vm: MainViewModel) {
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
             ) {
-                Column(Modifier.padding(10.dp)) {
+                Column(Modifier.fillMaxWidth().padding(10.dp)) {
                     val bmp = remember(rec.outPath) {
                         try {
                             val o = android.graphics.BitmapFactory.Options().apply { inSampleSize = 4 }
@@ -763,14 +796,11 @@ fun GalleryTab(vm: MainViewModel) {
                     if (bmp != null) {
                         Image(
                             bitmap = bmp.asImageBitmap(), contentDescription = null,
-                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)),
+                            modifier = Modifier.fillMaxWidth().height(140.dp).clip(RoundedCornerShape(10.dp)),
                             contentScale = ContentScale.Crop,
                         )
                     } else {
-                        Box(
-                            Modifier.fillMaxWidth().height(120.dp)
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                        )
+                        Box(Modifier.fillMaxWidth().height(140.dp).background(MaterialTheme.colorScheme.surfaceVariant))
                     }
                     Spacer(Modifier.height(8.dp))
                     Text(
@@ -779,16 +809,23 @@ fun GalleryTab(vm: MainViewModel) {
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "${rec.mode} · ${rec.width}×${rec.height} · ${rec.steps}st · seed ${rec.seed}\n" +
-                            "${fmt.format(Date(rec.createdAt))} · ${rec.durationMs / 1000}s",
+                        stringResource(R.string.rec_meta_fmt, rec.mode, rec.width, rec.height, rec.steps, rec.seed),
                         style = MaterialTheme.typography.bodySmall,
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 15.sp,
                     )
+                    Text(
+                        stringResource(R.string.rec_meta2_fmt, fmt.format(Date(rec.createdAt)), rec.durationMs / 1000),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     Row {
                         TextButton(onClick = { confirmDelete = rec }) {
-                            Icon(Icons.Filled.Delete, null, Modifier.size(14.dp)); Text("  Delete")
+                            Icon(Icons.Filled.Delete, null, Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(stringResource(R.string.delete_confirm))
                         }
                     }
                 }
@@ -799,62 +836,63 @@ fun GalleryTab(vm: MainViewModel) {
     confirmDelete?.let { rec ->
         AlertDialog(
             onDismissRequest = { confirmDelete = null },
-            title = { Text("Delete this creation?") },
+            title = { Text(stringResource(R.string.delete_title)) },
             text = { Text(rec.prompt) },
             confirmButton = {
-                TextButton(onClick = { vm.deleteRecord(rec); confirmDelete = null }) { Text("Delete") }
+                TextButton(onClick = { vm.deleteRecord(rec); confirmDelete = null }) {
+                    Text(stringResource(R.string.delete_confirm))
+                }
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text("Cancel") } },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = null }) { Text(stringResource(R.string.cancel)) }
+            },
         )
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun InspoTab() {
+    val groupTitles = listOf(
+        stringResource(R.string.inspo_t2i),
+        stringResource(R.string.inspo_sticker),
+        stringResource(R.string.inspo_edit),
+        stringResource(R.string.inspo_poster),
+    )
+    val kinds = listOf(Inspo.Kind.T2I, Inspo.Kind.STICKER, Inspo.Kind.EDIT, Inspo.Kind.POSTER)
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         Modifier.fillMaxSize().padding(horizontal = 20.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        val groups = listOf(
-            "Text → Image" to Inspo.byKind(Inspo.Kind.T2I),
-            "RGBA Stickers" to Inspo.byKind(Inspo.Kind.STICKER),
-            "Photo Edits" to Inspo.byKind(Inspo.Kind.EDIT),
-            "Typography Posters" to Inspo.byKind(Inspo.Kind.POSTER),
-        )
-        groups.forEach { (title, cards) ->
-            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(2) }) {
+        kinds.forEachIndexed { gi, kind ->
+            item(span = { GridItemSpan(2) }) {
                 Column {
                     Spacer(Modifier.height(10.dp))
-                    Text(title, style = MaterialTheme.typography.titleMedium)
-                    Spacer(Modifier.height(6.dp))
+                    Text(groupTitles[gi], style = MaterialTheme.typography.titleMedium)
                 }
             }
-            items(cards) { card ->
+            items(Inspo.byKind(kind)) { card ->
                 Card(
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                    modifier = Modifier.clickable { /* copy prompt — wired via clipboard in v1.1 */ },
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                 ) {
-                    Column(Modifier.padding(12.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Filled.AutoAwesome, null, Modifier.size(14.dp),
-                                tint = AppleTokens.Violet,
-                            )
+                            Icon(Icons.Filled.AutoAwesome, null, Modifier.size(14.dp), tint = AppleTokens.Violet)
                             Spacer(Modifier.width(6.dp))
                             Text(
-                                card.title, style = MaterialTheme.typography.bodyMedium,
+                                card.title,
+                                style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                         if (card.hint.isNotEmpty()) {
-                            Text(
-                                card.hint, style = MaterialTheme.typography.bodySmall,
-                                color = AppleTokens.Violet,
-                            )
+                            Text(card.hint, style = MaterialTheme.typography.bodySmall, color = AppleTokens.Violet)
                         }
                         Spacer(Modifier.height(6.dp))
                         Text(
@@ -877,36 +915,24 @@ fun GenServiceRunning(gen: GenBus.State): Boolean =
     gen.kind == GenBus.Kind.GENERATING || gen.kind == GenBus.Kind.LOADING
 
 @Composable
-fun PromptField(value: String, onChange: (String) -> Unit, hint: String) {
-    androidx.compose.material3.OutlinedTextField(
-        value = value,
-        onValueChange = onChange,
-        modifier = Modifier.fillMaxWidth(),
-        minLines = 3,
-        placeholder = { Text(hint, style = MaterialTheme.typography.bodyMedium) },
-        shape = RoundedCornerShape(14.dp),
-    )
-}
-
-@Composable
-fun GenerateButton(enabled: Boolean, running: Boolean, onClick: () -> Unit) {
+fun GenerateButton(enabled: Boolean, running: Boolean, modelReady: Boolean, onClick: () -> Unit) {
     Button(
-        onClick = onClick,
-        enabled = enabled,
+        onClick = {
+            if (modelReady) onClick()
+        },
+        enabled = enabled || (running && modelReady),
         shape = RoundedCornerShape(999.dp),
         colors = ButtonDefaults.buttonColors(containerColor = AppleTokens.ActionBlue),
         modifier = Modifier.fillMaxWidth().height(52.dp),
     ) {
         if (running) {
-            CircularProgressIndicator(
-                Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White,
-            )
+            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
             Spacer(Modifier.width(8.dp))
-            Text("Generating — see notification…", fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.btn_generate_running), fontWeight = FontWeight.Medium)
         } else {
             Icon(Icons.Filled.AutoAwesome, null, Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Text("Generate on-device", fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.btn_generate), fontWeight = FontWeight.Medium)
         }
     }
 }
@@ -917,17 +943,14 @@ fun OomCard() {
         colors = CardDefaults.cardColors(containerColor = Color(0x14FF9500)),
         shape = RoundedCornerShape(18.dp),
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.Warning, null, Modifier.size(18.dp), tint = AppleTokens.Orange)
                 Spacer(Modifier.width(8.dp))
-                Text("Out of memory — recoverable", style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.oom_title), style = MaterialTheme.typography.titleMedium)
             }
             Spacer(Modifier.height(6.dp))
-            Text(
-                "Buffers were freed; nothing is broken. Close other apps and retry, or drop to a smaller tier (Fast/Tiny).",
-                style = MaterialTheme.typography.bodySmall,
-            )
+            Text(stringResource(R.string.oom_body), style = MaterialTheme.typography.bodySmall)
         }
     }
 }
@@ -938,8 +961,8 @@ fun ErrorCard(msg: String) {
         colors = CardDefaults.cardColors(containerColor = Color(0x14D70015)),
         shape = RoundedCornerShape(18.dp),
     ) {
-        Column(Modifier.padding(16.dp)) {
-            Text("Generation failed", style = MaterialTheme.typography.titleMedium, color = AppleTokens.Red)
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            Text(stringResource(R.string.err_title), style = MaterialTheme.typography.titleMedium, color = AppleTokens.Red)
             Spacer(Modifier.height(6.dp))
             Text(msg, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
         }

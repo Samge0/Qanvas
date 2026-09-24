@@ -16,7 +16,7 @@ object GenBus {
         val kind: Kind = Kind.IDLE,
         /** 0..100 (generation progress or overall download progress) */
         val progress: Int = 0,
-        /** human stage label, e.g. "Denoising 7/20" */
+        /** stage key for i18n: "" | "load" | "te" | "denoise" | "vae" | filename during download */
         val stage: String = "",
         /** output file when kind == DONE */
         val doneFile: String? = null,
@@ -24,6 +24,9 @@ object GenBus {
         val error: String? = null,
         /** detail line for downloads: "3.21/10.28 GB · dit.mnn.weight" */
         val detail: String = "",
+        /** denoising step derived from progress (UI renders "7/20" with its own strings) */
+        val stageKey: String = "",
+        val stageStep: Int = 0,
     )
 
     private val _state = MutableStateFlow(State())

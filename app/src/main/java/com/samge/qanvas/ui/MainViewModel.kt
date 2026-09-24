@@ -1,10 +1,11 @@
 package com.samge.qanvas.ui
 
 import android.app.Application
-import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.samge.qanvas.QanvasApp
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.Locale
 
 data class GateStatus(
     val modelPresent: Boolean = false,
@@ -38,6 +40,7 @@ data class PickedImage(val uri: Uri, val width: Int, val height: Int, val cacheP
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val db = (app as QanvasApp).db
+    private val prefs = app.getSharedPreferences("qanvas", Application.MODE_PRIVATE)
 
     // ---- gate ----
     private val _gate = MutableStateFlow(GateStatus())
@@ -58,13 +61,40 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _editInput = MutableStateFlow<PickedImage?>(null)
     val editInput: StateFlow<PickedImage?> = _editInput.asStateFlow()
 
-    // ---- persisted UI prefs ----
-    private val prefs = app.getSharedPreferences("qanvas", Application.MODE_PRIVATE)
+    // ---- toast bus ----
+    private val _toast = MutableStateFlow<String?>(null)
+    val toast: StateFlow<String?> = _toast.asStateFlow()
 
+    fun toast(key: String) { _toast.value = key }
+    fun toastShown() { _toast.value = null }
+
+    // ---- persisted UI prefs ----
     val ratioOrdinal = MutableStateFlow(prefs.getInt("ratio", 0))
     val tierOrdinal = MutableStateFlow(prefs.getInt("tier", 1))   // Fast default: better identity keep
     val steps = MutableStateFlow(prefs.getInt("steps", 20))
     val seedText = MutableStateFlow(prefs.getString("seed", "42") ?: "42")
+
+    /** 0 = system, 1 = en, 2 = zh */
+    val language = MutableStateFlow(prefs.getInt("language", 0))
+
+    fun applyPersistedLocale() {
+        when (prefs.getInt("language", 0)) {
+            1 -> AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags("en"))
+            2 -> AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags("zh-CN"))
+            else -> AppCompatDelegate.setApplicationLocales(LocaleListCompat.getEmptyLocaleList())
+        }
+    }
+
+    fun setLanguage(which: Int) {
+        language.value = which
+        prefs.edit().putInt("language", which).apply()
+        when (which) {
+            1 -> AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags("en"))
+            2 -> AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags("zh-CN"))
+            else -> AppCompatDelegate.setApplicationLocales(LocaleListCompat.getEmptyLocaleList())
+        }
+        // recreate so all composables re-resolve stringResource()
+    }
 
     fun refreshGate() {
         viewModelScope.launch(Dispatchers.IO) {
@@ -77,6 +107,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             )
             withContext(Dispatchers.Main) { _gate.value = g }
         }
+    }
+
+    fun needModel(): Boolean {
+        val missing = GenEngine.missingFiles(getApplication()) != null
+        if (missing) _toast.value = "__need_download__"
+        return missing
     }
 
     fun startDownload() = GenService.startDownload(getApplication())
@@ -125,7 +161,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val app = getApplication<Application>()
-                // copy into app-private cache so the service can read it by path
                 val dst = File(app.cacheDir, "edit_input_" + System.currentTimeMillis() + ".png")
                 app.contentResolver.openInputStream(uri)!!.use { input ->
                     dst.outputStream().use { input.copyTo(it) }

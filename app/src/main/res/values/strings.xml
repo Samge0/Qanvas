@@ -1,4 +1,139 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Qanvas</string>
+
+    <!-- tabs -->
+    <string name="tab_create">Create</string>
+    <string name="tab_sticker">Sticker</string>
+    <string name="tab_edit">Edit</string>
+    <string name="tab_gallery">Gallery</string>
+    <string name="tab_inspo">Inspo</string>
+    <string name="tab_settings">Settings</string>
+
+    <!-- top bar -->
+    <string name="top_subtitle">Qwen-Image-2.1 · 7B · on-device</string>
+    <string name="model_ready">Model ready</string>
+    <string name="model_missing">Model not installed</string>
+
+    <!-- home / gate -->
+    <string name="home_title">Private AI art studio,\\nentirely on your phone.</string>
+    <string name="home_desc">Qwen-Image-2.1 · 7B diffusion transformer, int4 on OpenCL. No cloud, no upload, no account — your photos never leave the device.</string>
+    <string name="feature_t2i">Text → Image</string>
+    <string name="feature_edit">Photo Editing</string>
+    <string name="feature_sticker">RGBA Stickers</string>
+    <string name="gate_title">One-time model setup</string>
+    <string name="gate_desc">Model download ~10.6 GB from Hugging Face · resumable · checksum-verified. Wi-Fi strongly recommended.</string>
+    <string name="ram_fmt">RAM %1$s</string>
+    <string name="ram_ok">recommended class</string>
+    <string name="ram_low">12 GB+ recommended — use Fast/Tiny tiers</string>
+    <string name="storage_fmt">Free storage %1$s / 11 GB needed</string>
+    <string name="storage_ok">enough space</string>
+    <string name="storage_low">free up space to continue</string>
+
+    <!-- missing-model banner -->
+    <string name="banner_missing">Model not downloaded yet. Download it in Settings first.</string>
+    <string name="banner_action">Go to Settings</string>
+
+    <!-- generation controls -->
+    <string name="create_placeholder">Describe the image…  e.g. "A neon sign that reads QWEN, rainy night"</string>
+    <string name="sticker_placeholder">Sticker subject…  keep the RGBA template text</string>
+    <string name="edit_placeholder">Describe the edit…  e.g. "Change the background to a sunset beach"</string>
+    <string name="ratio_label">Aspect ratio</string>
+    <string name="tier_label">Quality tier</string>
+    <string name="tier_standard">Standard</string>
+    <string name="tier_fast">Fast</string>
+    <string name="tier_tiny">Tiny</string>
+    <string name="pixel_budget_label">Pixel budget</string>
+    <string name="steps_label">Steps</string>
+    <string name="seed_label">Seed</string>
+    <string name="size_fmt">Output %1$d×%2$d · %3$d tokens/step · ~%4$d min est.</string>
+    <string name="edit_est_fmt">~%1$d min est. for edits</string>
+    <string name="fast_tip">Tip: Fast tier keeps faces &amp; identity better than Standard (measured upstream); it\'s the default here.</string>
+    <string name="sticker_tip">Native RGBA transparency — a Qwen-Image-2.1 exclusive on-device. Exports real transparent PNG stickers.</string>
+    <string name="btn_generate">Generate on-device</string>
+    <string name="btn_generate_running">Generating — see notification…</string>
+    <string name="progress_preparing">Preparing…</string>
+    <string name="progress_note_fmt">~%1$d min on SD 8 Gen 2-class hardware · notification keeps progress when you leave</string>
+    <string name="oom_title">Out of memory — recoverable</string>
+    <string name="oom_body">Buffers were freed; nothing is broken. Close other apps and retry, or drop to a smaller tier (Fast/Tiny).</string>
+    <string name="err_title">Generation failed</string>
+    <string name="result_placeholder">Result appears here</string>
+
+    <!-- edit tab -->
+    <string name="edit_title">AI photo editing</string>
+    <string name="edit_desc">Pick a photo, describe the change. Output keeps the input\'s aspect ratio at the tier budget.</string>
+    <string name="edit_pick_title">Choose a photo to edit</string>
+    <string name="edit_pick_sub">stays on your device — never uploaded</string>
+    <string name="edit_input_fmt">Input %1$d×%2$d</string>
+    <string name="edit_output_fmt">→ output %1$d×%2$d at this tier</string>
+    <string name="edit_remove">Remove</string>
+
+    <!-- gallery -->
+    <string name="gallery_empty_title">No creations yet</string>
+    <string name="gallery_empty_sub">Generated images land here with full parameters</string>
+    <string name="rec_meta_fmt">%1$s · %2$d×%3$d · %4$d st · seed %5$d</string>
+    <string name="rec_meta2_fmt">%1$s · %2$d s</string>
+    <string name="delete_title">Delete this creation?</string>
+    <string name="delete_confirm">Delete</string>
+    <string name="cancel">Cancel</string>
+
+    <!-- inspo -->
+    <string name="inspo_t2i">Text → Image</string>
+    <string name="inspo_sticker">RGBA Stickers</string>
+    <string name="inspo_edit">Photo Edits</string>
+    <string name="inspo_poster">Typography Posters</string>
+    <string name="inspo_use">Use</string>
+
+    <!-- settings: download -->
+    <string name="set_download_title">Model download</string>
+    <string name="set_download_desc">Qwen-Image-2.1 MNN · int4 · ~10.6 GB download, ~11 GB installed. Includes text-to-image, photo-editing and RGBA-sticker components.\n\nThis is currently the smallest official variant — the 7B DiT int4 (4.3 GB) and the Qwen3-VL-8B text encoder int4 (4.9 GB) dominate the size, and no lighter quantization exists. A text-to-image-only bundle would save only ~0.5 GB.</string>
+    <string name="set_download_btn">Download model · 10.6 GB</string>
+    <string name="set_download_stop">Stop</string>
+    <string name="set_download_done">Model downloaded ✓</string>
+    <string name="set_download_missing_fmt">Missing files: %1$s</string>
+
+    <!-- settings: directory -->
+    <string name="set_dir_title">Model directory</string>
+    <string name="set_dir_current_fmt">Current: %1$s</string>
+    <string name="set_dir_hint">Custom path (must be writable, e.g. a secondary storage getExternalFilesDir path)</string>
+    <string name="set_dir_apply">Use this directory</string>
+    <string name="set_dir_reset">Reset to default</string>
+    <string name="set_dir_migrate">Move model files here</string>
+    <string name="set_migrating_fmt">Moving… %1$d%%</string>
+    <string name="set_dir_note">The native runtime needs a real filesystem path (SAF/cloud providers are not supported). The default app-private storage is recommended for most devices.</string>
+    <string name="set_danger_title">Danger zone</string>
+    <string name="set_delete_model">Delete model files (free ~11 GB)</string>
+    <string name="set_delete_confirm">Delete all model files? You will need to download them again to generate.</string>
+    <string name="toast_dir_invalid">Directory is not writable</string>
+    <string name="toast_dir_applied">Model directory updated</string>
+    <string name="toast_need_download">Model not ready — download it in Settings first</string>
+    <string name="toast_migrate_done">Model files moved</string>
+    <string name="toast_migrate_need_custom">Set a custom directory first</string>
+
+    <!-- settings: proxy -->
+    <string name="set_proxy_title">Download proxy</string>
+    <string name="set_proxy_desc">Route model downloads through an HTTP proxy — useful when Hugging Face is unreachable directly.</string>
+    <string name="set_proxy_enable">Enable proxy</string>
+    <string name="set_proxy_host">Host</string>
+    <string name="set_proxy_port">Port</string>
+
+    <!-- settings: language / about -->
+    <string name="set_lang_title">Language / 语言</string>
+    <string name="set_lang_system">System</string>
+    <string name="set_lang_en">English</string>
+    <string name="set_lang_zh">中文</string>
+    <string name="set_about_title">About</string>
+    <string name="set_about_body">Qanvas %1$s · runtime AAR v0.2.2 · model: evankuo/Qwen-Image-2.1-MNN (Qwen Research License)</string>
+
+    <!-- notifications (service) -->
+    <string name="notif_title">Qanvas</string>
+    <string name="notif_downloading">Downloading model</string>
+    <string name="notif_generating">Generating</string>
+    <string name="notif_preparing">Preparing</string>
+    <string name="notif_stage_load">Loading stages</string>
+    <string name="notif_stage_te">Text encoder</string>
+    <string name="notif_stage_denoise">Denoising %1$d/%2$d</string>
+    <string name="notif_stage_vae">VAE decode</string>
+    <string name="notif_channel_gen">Generation</string>
+    <string name="notif_channel_dl">Model download</string>
 </resources>
