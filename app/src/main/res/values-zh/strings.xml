@@ -199,6 +199,7 @@
     <string name="toast_save_failed">保存失败</string>
     <string name="save_pick_title">保存图片</string>
     <string name="busy_block_hint">有生成任务进行中——请等待完成或先取消</string>
+    <string name="busy_other_tab">其他页面正在生成——请等待完成（或到该页取消）后再试</string>
 
     <!-- v1.1.4 additions: background reliability -->
     <string name="set_bg_title">后台运行保障</string>

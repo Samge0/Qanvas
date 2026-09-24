@@ -199,6 +199,7 @@
     <string name="toast_save_failed">Could not save the image</string>
     <string name="save_pick_title">Save image</string>
     <string name="busy_block_hint">A generation is running — wait or cancel it first</string>
+    <string name="busy_other_tab">Another tab is generating — wait for it to finish (or cancel it there) first</string>
 
     <!-- v1.1.4 additions: background reliability -->
     <string name="set_bg_title">Background running</string>

@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
@@ -613,9 +614,10 @@ fun CreateTab(vm: MainViewModel) {
         }
         item {
             GenerateButton(
-                enabled = prompt.isNotBlank() && !GenServiceRunning(gen) && modelReady,
+                enabled = prompt.isNotBlank(),
                 running = GenServiceRunning(gen),
                 modelReady = modelReady,
+                crossTabBusy = anyTabBusyBut(0, vm),
             ) { vm.startGeneration(prompt, "t2i", null, tab = 0) }
         }
         if (GenServiceRunning(gen)) {
@@ -685,9 +687,10 @@ fun StickerTab(vm: MainViewModel) {
         }
         item {
             GenerateButton(
-                enabled = prompt.isNotBlank() && !GenServiceRunning(gen) && modelReady,
+                enabled = prompt.isNotBlank(),
                 running = GenServiceRunning(gen),
                 modelReady = modelReady,
+                crossTabBusy = anyTabBusyBut(1, vm),
             ) { vm.startGeneration(prompt, "t2i", null, tab = 1) }
         }
         if (GenServiceRunning(gen)) {
@@ -805,9 +808,10 @@ fun EditTab(vm: MainViewModel) {
         item { StepsSeedRow(vm, stringResource(R.string.edit_est_fmt, GenEngine.estimateSeconds(800, steps) / 60)) }
         item {
             GenerateButton(
-                enabled = editInput != null && prompt.isNotBlank() && !GenServiceRunning(gen) && modelReady,
+                enabled = editInput != null && prompt.isNotBlank(),
                 running = GenServiceRunning(gen),
                 modelReady = modelReady,
+                crossTabBusy = anyTabBusyBut(2, vm),
             ) { vm.startGeneration(prompt, "edit", editInput, tab = 2) }
         }
         if (GenServiceRunning(gen)) {
@@ -827,7 +831,6 @@ fun EditTab(vm: MainViewModel) {
 fun GalleryTab(vm: MainViewModel, onOpen: (GenRecord) -> Unit) {
     val history by vm.history.collectAsState()
     var confirmDelete by remember { mutableStateOf<GenRecord?>(null) }
-    var zoomPath by remember { mutableStateOf<String?>(null) }
 
     if (history.isEmpty()) {
         Column(
@@ -847,58 +850,29 @@ fun GalleryTab(vm: MainViewModel, onOpen: (GenRecord) -> Unit) {
 
     val datePattern = stringResource(R.string.date_fmt)
     val fmt = remember(datePattern) { SimpleDateFormat(datePattern, Locale.getDefault()) }
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        Modifier.fillMaxSize().padding(horizontal = 20.dp),
+
+    // Xiaohongshu-style staggered feed: 2 columns, image height follows its
+    // aspect ratio (clamped), meta strip under each card, soft rounded cards.
+    val cols = 2
+    val chunks = remember(history) {
+        List(cols) { c -> history.filterIndexed { i, _ -> i % cols == c } }
+    }
+    Row(
+        Modifier.fillMaxSize().padding(horizontal = 14.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        items(history, key = { it.id }) { rec ->
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                modifier = Modifier.clickable { onOpen(rec) },
+        chunks.forEach { column ->
+            Column(
+                Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Column(Modifier.fillMaxWidth().padding(10.dp)) {
-                    val bmp = remember(rec.outPath) {
-                        try {
-                            val o = android.graphics.BitmapFactory.Options().apply { inSampleSize = 4 }
-                            android.graphics.BitmapFactory.decodeFile(rec.outPath, o)
-                        } catch (e: Exception) { null }
-                    }
-                    if (bmp != null) {
-                        Image(
-                            bitmap = bmp.asImageBitmap(), contentDescription = null,
-                            modifier = Modifier.fillMaxWidth().height(140.dp).clip(RoundedCornerShape(10.dp)),
-                            contentScale = ContentScale.Crop,
-                        )
-                    } else {
-                        Box(Modifier.fillMaxWidth().height(140.dp).background(MaterialTheme.colorScheme.surfaceVariant))
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Text(rec.prompt, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        stringResource(R.string.rec_meta_fmt, modeLabel(rec.mode), rec.width, rec.height, rec.steps, rec.seed),
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = 15.sp,
-                    )
-                    Text(
-                        stringResource(R.string.rec_meta2_fmt, fmt.format(Date(rec.createdAt)), rec.durationMs / 1000),
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                column.forEach { rec ->
+                    WaterfallCard(rec, fmt, onOpen)
                 }
+                Spacer(Modifier.height(24.dp))
             }
         }
     }
-
-    zoomPath?.let { p -> ZoomDialog(p) { zoomPath = null } }
 
     confirmDelete?.let { rec ->
         AlertDialog(
@@ -918,6 +892,89 @@ fun GalleryTab(vm: MainViewModel, onOpen: (GenRecord) -> Unit) {
 }
 
 @Composable
+private fun WaterfallCard(rec: GenRecord, fmt: SimpleDateFormat, onOpen: (GenRecord) -> Unit) {
+    val ratio = if (rec.width > 0 && rec.height > 0) rec.width.toFloat() / rec.height else 1f
+    // clamp visual aspect so extreme ratios don't blow up the column
+    val clamped = ratio.coerceIn(0.62f, 1.5f)
+    val bmp = remember(rec.outPath) {
+        runCatching {
+            val o = android.graphics.BitmapFactory.Options().apply { inSampleSize = 2 }
+            android.graphics.BitmapFactory.decodeFile(rec.outPath, o)
+        }.getOrNull()
+    }
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        modifier = Modifier.fillMaxWidth().clickable { onOpen(rec) },
+    ) {
+        Column {
+            Box(
+                Modifier.fillMaxWidth().aspectRatio(1f / clamped),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (bmp != null) {
+                    Image(
+                        bitmap = bmp.asImageBitmap(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                    )
+                } else {
+                    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant))
+                }
+            }
+            Column(Modifier.fillMaxWidth().padding(10.dp)) {
+                Text(
+                    rec.prompt,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
+                    lineHeight = 16.sp,
+                )
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // mode chip
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = AppleTokens.VioletSoft,
+                    ) {
+                        Text(
+                            modeLabel(rec.mode),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = AppleTokens.Violet,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        )
+                    }
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "${rec.steps}st",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "#${rec.seed}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    fmt.format(Date(rec.createdAt)) + " · " + stringResource(R.string.sec_fmt, rec.durationMs / 1000.0),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun modeLabel(mode: String): String = when (mode) {
     "edit" -> stringResource(R.string.mode_edit)
     "sticker" -> stringResource(R.string.mode_sticker)
@@ -933,7 +990,7 @@ fun RecordDetailDialog(vm: MainViewModel, rec: GenRecord, onClose: () -> Unit) {
     val datePattern = stringResource(R.string.date_fmt)
     val fmt = remember(datePattern) { SimpleDateFormat(datePattern, Locale.getDefault()) }
 
-    Dialog(onDismissRequest = onClose) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onClose) {
         Card(
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -1032,6 +1089,11 @@ fun RecordDetailDialog(vm: MainViewModel, rec: GenRecord, onClose: () -> Unit) {
                         Spacer(Modifier.width(6.dp))
                         Text(stringResource(R.string.d_edit_img), maxLines = 1)
                     }
+                    OutlinedButton(
+                        onClick = { vm.reusePrompt(rec); onClose() },
+                        shape = RoundedCornerShape(999.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    ) { Text(stringResource(R.string.d_reuse), maxLines = 1) }
                     OutlinedButton(
                         onClick = {
                             // regenerate: same params, fresh seed, run on Create tab
@@ -1296,23 +1358,63 @@ private fun GateRow(ok: Boolean, label: String, note: String, icon: @Composable 
 fun GenServiceRunning(gen: GenBus.State): Boolean =
     gen.kind == GenBus.Kind.GENERATING || gen.kind == GenBus.Kind.LOADING
 
+/** True when a job started on some other tab is still running. */
 @Composable
-fun GenerateButton(enabled: Boolean, running: Boolean, modelReady: Boolean, onClick: () -> Unit) {
+fun anyTabBusyBut(tab: Int, vm: MainViewModel): Boolean {
+    val g = vm.gen.collectAsState().value
+    val active = g.kind == GenBus.Kind.GENERATING || g.kind == GenBus.Kind.LOADING
+    return active && g.originTab != tab
+}
+
+/**
+ * CTA with three states: normal, running (this tab owns the job), cross-tab-busy
+ * (another tab is generating — stays clickable, explains via toast).
+ */
+@Composable
+fun GenerateButton(
+    enabled: Boolean,
+    running: Boolean,
+    modelReady: Boolean,
+    crossTabBusy: Boolean = false,
+    onClick: () -> Unit,
+) {
+    val ctx = LocalContext.current
     Button(
-        onClick = { if (modelReady) onClick() },
-        enabled = enabled || (running && modelReady),
+        onClick = {
+            when {
+                !modelReady -> Unit
+                running -> Unit
+                crossTabBusy ->
+                    android.widget.Toast.makeText(
+                        ctx, ctx.getString(R.string.busy_other_tab), android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                else -> onClick()
+            }
+        },
+        enabled = modelReady,
         shape = RoundedCornerShape(999.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = AppleTokens.ActionBlue),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (crossTabBusy) MaterialTheme.colorScheme.surfaceVariant else AppleTokens.ActionBlue,
+            contentColor = if (crossTabBusy) MaterialTheme.colorScheme.onSurfaceVariant else Color.White,
+        ),
         modifier = Modifier.fillMaxWidth().height(48.dp),
     ) {
-        if (running) {
-            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
-            Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.btn_generate_running), fontWeight = FontWeight.Medium, )
-        } else {
-            Icon(Icons.Filled.AutoAwesome, null, Modifier.size(16.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(stringResource(R.string.btn_generate), fontWeight = FontWeight.Medium, )
+        when {
+            running -> {
+                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.btn_generate_running), fontWeight = FontWeight.Medium)
+            }
+            crossTabBusy -> {
+                Icon(Icons.Filled.Schedule, null, Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.btn_generate), fontWeight = FontWeight.Medium)
+            }
+            else -> {
+                Icon(Icons.Filled.AutoAwesome, null, Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.btn_generate), fontWeight = FontWeight.Medium)
+            }
         }
     }
 }
