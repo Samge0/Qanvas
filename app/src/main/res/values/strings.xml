@@ -178,6 +178,7 @@
     <string name="d_regen">Regenerate</string>
 
     <!-- v1.1.3 additions -->
+    <string name="cancel_keep">Keep generating</string>
     <string name="cancel_job">Cancel</string>
     <string name="cancel_confirm_title">Cancel current generation?</string>
     <string name="cancel_confirm_body">The partial image will be discarded. Progress so far cannot be resumed.</string>

@@ -208,8 +208,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         refreshGate()
                         _toast.value = if (st.pausedMs > 1000) "__paused__:${st.pausedMs / 1000}" else "__done__"
                     }
-                    GenBus.Kind.OOM, GenBus.Kind.ERROR ->
+                    GenBus.Kind.OOM, GenBus.Kind.ERROR -> {
                         updTab(tab) { it.copy(gen = st) }
+                        if (st.error == "__cancelled__") _toast.value = "__cancelled__"
+                    }
                     GenBus.Kind.DL_ERROR -> {
                         dlError = st.error
                         _toast.value = "__dl_failed__"

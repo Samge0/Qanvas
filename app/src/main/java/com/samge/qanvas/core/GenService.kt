@@ -57,13 +57,35 @@ class GenService : Service() {
         const val X_OUT = "out"
         const val X_TAB = "tab"
 
+        /** Tab that owns the currently running job (-1 = none). */
+        @Volatile
+        var currentTab: Int = -1
+            private set
+
         /** Cooperative cancellation flag for the running generation. */
         @Volatile
         var cancelRequested: Boolean = false
             private set
 
+        /**
+         * Cooperative cancel: sets the flag checked by the progress listener.
+         * NOTE the MNN runtime swallows exceptions thrown from the listener, so
+         * [ACTION_STOP]/[killRunning] is what actually guarantees teardown.
+         */
         fun requestCancel() {
             cancelRequested = true
+        }
+
+        /** Hard-cancel a running generation job (called by ACTION_STOP). */
+        fun killRunning(svc: GenService) {
+            cancelRequested = true
+            running = false
+            releaseHot()
+            BgKeepAlive.stopSilent()
+            BgKeepAlive.removeOverlay(svc)
+            svc.stopForeground(STOP_FOREGROUND_REMOVE)
+            svc.stopSelf()
+            GenBus.post(GenBus.State(GenBus.Kind.ERROR, error = "__cancelled__", originTab = currentTab))
         }
 
         @Volatile
@@ -144,10 +166,16 @@ class GenService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
-                cancelled.set(true)
-                downloader?.cancel()
+                // hard-kill the running job (generation or download)
                 job?.cancel()
-                stopSelf()
+                if (running) {
+                    killRunning(this)
+                } else {
+                    downloader?.cancel()
+                    cancelled.set(true)
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                }
             }
             ACTION_RELEASE -> {
                 releaseHot()
@@ -250,6 +278,7 @@ class GenService : Service() {
         }
         running = true
         cancelRequested = false
+        currentTab = tab
         val prefs = GenEngine.prefs(this)
         val useSilent = prefs.getBoolean(GenEngine.KEY_BG_SILENT, true)
         val useOverlay = prefs.getBoolean(GenEngine.KEY_BG_OVERLAY, true)
@@ -395,6 +424,7 @@ class GenService : Service() {
                     }
                 }
                 running = false
+                currentTab = -1
                 BgKeepAlive.stopSilent()
                 BgKeepAlive.removeOverlay(this@GenService)
                 runCatching { if (wl.isHeld) wl.release() }

@@ -51,6 +51,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.outlined.Undo
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -426,11 +427,13 @@ fun ProgressCard(gen: GenBus.State, estimateSec: Int, stepsTotal: Int = 20, onCa
                             text = { Text(stringResource(R.string.cancel_confirm_body)) },
                             confirmButton = {
                                 TextButton(onClick = { confirm = false; onCancel() }) {
+                                    Icon(Icons.Outlined.Undo, null, Modifier.size(14.dp), tint = AppleTokens.Red)
+                                    Spacer(Modifier.width(4.dp))
                                     Text(stringResource(R.string.cancel_job), color = AppleTokens.Red)
                                 }
                             },
                             dismissButton = {
-                                TextButton(onClick = { confirm = false }) { Text(stringResource(R.string.cancel)) }
+                                TextButton(onClick = { confirm = false }) { Text(stringResource(R.string.cancel_keep)) }
                             },
                         )
                     }
@@ -577,6 +580,7 @@ fun ResultCard(bitmap: android.graphics.Bitmap?, outPath: String? = null, checke
 
 @Composable
 fun CreateTab(vm: MainViewModel) {
+    val context = LocalContext.current
     val ratio by vm.ratioOrdinal.collectAsState()
     val tier by vm.tierOrdinal.collectAsState()
     val steps by vm.steps.collectAsState()
@@ -632,11 +636,14 @@ fun CreateTab(vm: MainViewModel) {
         if (GenServiceRunning(gen)) {
             item {
                 val size = QwenImage21SizeProxy.of(ratio, tier)
-                ProgressCard(gen, GenEngine.estimateSeconds(size.tokens(), steps), stepsTotal = steps, onCancel = { GenService.requestCancel() })
+                ProgressCard(gen, GenEngine.estimateSeconds(size.tokens(), steps), stepsTotal = steps, onCancel = {
+                    GenService.requestCancel()
+                    GenService.requestStop(context)
+                })
             }
         }
         if (gen.kind == GenBus.Kind.OOM) item { OomCard() }
-        if (gen.kind == GenBus.Kind.ERROR) item { ErrorCard(gen.error ?: "unknown") }
+        if (gen.kind == GenBus.Kind.ERROR && gen.error != "__cancelled__") item { ErrorCard(gen.error ?: "unknown") }
         item { ResultCard(result, resultPath) }
         item { Spacer(Modifier.height(30.dp)) }
     }
@@ -645,6 +652,7 @@ fun CreateTab(vm: MainViewModel) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun StickerTab(vm: MainViewModel) {
+    val context = LocalContext.current
     val ratio by vm.ratioOrdinal.collectAsState()
     val tier by vm.tierOrdinal.collectAsState()
     val steps by vm.steps.collectAsState()
@@ -705,11 +713,14 @@ fun StickerTab(vm: MainViewModel) {
         if (GenServiceRunning(gen)) {
             item {
                 val size = QwenImage21SizeProxy.of(ratio, tier)
-                ProgressCard(gen, GenEngine.estimateSeconds(size.tokens(), steps), stepsTotal = steps, onCancel = { GenService.requestCancel() })
+                ProgressCard(gen, GenEngine.estimateSeconds(size.tokens(), steps), stepsTotal = steps, onCancel = {
+                    GenService.requestCancel()
+                    GenService.requestStop(context)
+                })
             }
         }
         if (gen.kind == GenBus.Kind.OOM) item { OomCard() }
-        if (gen.kind == GenBus.Kind.ERROR) item { ErrorCard(gen.error ?: "unknown") }
+        if (gen.kind == GenBus.Kind.ERROR && gen.error != "__cancelled__") item { ErrorCard(gen.error ?: "unknown") }
         item { ResultCard(result, resultPath, checker = true) }
         item { Spacer(Modifier.height(30.dp)) }
     }
@@ -717,6 +728,7 @@ fun StickerTab(vm: MainViewModel) {
 
 @Composable
 fun EditTab(vm: MainViewModel) {
+    val context = LocalContext.current
     val editInput by vm.editInput.collectAsState()
     val tier by vm.tierOrdinal.collectAsState()
     val steps by vm.steps.collectAsState()
@@ -824,10 +836,15 @@ fun EditTab(vm: MainViewModel) {
             ) { vm.startGeneration(prompt, "edit", editInput, tab = 2) }
         }
         if (GenServiceRunning(gen)) {
-            item { ProgressCard(gen, GenEngine.estimateSeconds(800, steps), stepsTotal = steps, onCancel = { GenService.requestCancel() }) }
+            item {
+                ProgressCard(gen, GenEngine.estimateSeconds(800, steps), stepsTotal = steps, onCancel = {
+                    GenService.requestCancel()
+                    GenService.requestStop(context)
+                })
+            }
         }
         if (gen.kind == GenBus.Kind.OOM) item { OomCard() }
-        if (gen.kind == GenBus.Kind.ERROR) item { ErrorCard(gen.error ?: "unknown") }
+        if (gen.kind == GenBus.Kind.ERROR && gen.error != "__cancelled__") item { ErrorCard(gen.error ?: "unknown") }
         item { ResultCard(result, resultPath) }
         item { Spacer(Modifier.height(30.dp)) }
     }
