@@ -31,8 +31,6 @@
     <string name="storage_low">请先清理空间</string>
 
     <!-- missing-model banner -->
-    <string name="banner_missing">模型尚未下载。请先到设置页完成下载。</string>
-    <string name="banner_action">去设置</string>
 
     <!-- generation controls -->
     <string name="create_placeholder">描述画面… 例如："雨夜里写着 QWEN 的霓虹灯招牌"</string>
@@ -71,8 +69,6 @@
     <!-- gallery -->
     <string name="gallery_empty_title">还没有作品</string>
     <string name="gallery_empty_sub">生成的图片会连同完整参数保存在这里</string>
-    <string name="rec_meta_fmt">%1$s · %2$d×%3$d · %4$d 步 · 种子 %5$d</string>
-    <string name="rec_meta2_fmt">%1$s · %2$d 秒</string>
     <string name="delete_title">删除这个作品？</string>
     <string name="delete_confirm">删除</string>
     <string name="cancel">取消</string>
@@ -82,12 +78,12 @@
     <string name="inspo_sticker">透明贴纸</string>
     <string name="inspo_edit">照片编辑</string>
     <string name="inspo_poster">文字海报</string>
-    <string name="inspo_use">使用</string>
 
     <!-- settings: download -->
     <string name="set_download_title">模型下载</string>
     <string name="set_download_desc">Qwen-Image-2.1 MNN · int4 · 下载约 10.6 GB，安装约 11 GB。包含文生图、照片编辑与透明贴纸全部组件。\n\n这是目前最小的官方变体——体积大头是 7B DiT int4（4.3 GB）和 Qwen3-VL-8B 文本编码器 int4（4.9 GB），尚无更轻的量化版本；仅保留文生图的组合也只能省约 0.5 GB。</string>
     <string name="set_download_btn">下载模型 · 10.6 GB</string>
+    <string name="dl_failed_fmt">下载失败：%1$s</string>
     <string name="set_download_stop">停止</string>
     <string name="set_download_done">模型已下载 ✓</string>
     <string name="set_download_missing_fmt">缺少文件：%1$s</string>
@@ -95,20 +91,15 @@
     <!-- settings: directory -->
     <string name="set_dir_title">模型目录</string>
     <string name="set_dir_current_fmt">当前：%1$s</string>
-    <string name="set_dir_hint">自定义路径（必须可写，例如副存储上的 getExternalFilesDir 路径）</string>
-    <string name="set_dir_apply">使用此目录</string>
     <string name="set_dir_reset">恢复默认目录</string>
-    <string name="set_dir_migrate">迁移模型文件到此处</string>
     <string name="set_migrating_fmt">迁移中… %1$d%%</string>
     <string name="set_dir_note">原生运行时需要真实文件系统路径（不支持 SAF/云盘）。大多数设备建议使用默认的应用私有存储。</string>
     <string name="set_danger_title">危险操作</string>
     <string name="set_delete_model">删除模型文件（释放约 11 GB）</string>
     <string name="set_delete_confirm">删除全部模型文件？删除后需重新下载才能生成。</string>
     <string name="toast_dir_invalid">目录不可写</string>
-    <string name="toast_dir_applied">模型目录已更新</string>
     <string name="toast_need_download">模型未就绪——请先到设置页下载</string>
     <string name="toast_migrate_done">模型文件已迁移</string>
-    <string name="toast_migrate_need_custom">请先设置自定义目录</string>
 
     <!-- settings: proxy -->
     <string name="set_proxy_title">下载代理</string>
@@ -143,7 +134,6 @@
     <string name="migrate_move">移动（更快）</string>
     <string name="migrate_copy">复制后清理旧目录</string>
     <string name="reset_dir_confirm">恢复为默认应用目录？自定义目录中的文件将保留在原处。</string>
-    <string name="dir_pick_storage_fmt">存储 %1$d</string>
 
     <!-- v1.1.2 additions: gallery detail -->
     <string name="detail_title">作品详情</string>
@@ -186,8 +176,6 @@
     <!-- v1.1.6 additions -->
     <string name="d_delete">删除</string>
     <string name="d_regen">重新生成</string>
-    <string name="d_regenerate_confirm_title">重新生成这个作品？</string>
-    <string name="d_regenerate_confirm_body">将在创作页以相同提示词、尺寸、步数和新的随机种子重新生成。</string>
 
     <!-- v1.1.3 additions -->
     <string name="cancel_job">取消</string>
@@ -197,7 +185,6 @@
     <string name="save_image">保存</string>
     <string name="toast_saved_ok">已保存到系统相册</string>
     <string name="toast_save_failed">保存失败</string>
-    <string name="save_pick_title">保存图片</string>
     <string name="busy_block_hint">有生成任务进行中——请等待完成或先取消</string>
     <string name="busy_other_tab">其他页面正在生成——请等待完成（或到该页取消）后再试</string>
 
@@ -213,7 +200,6 @@
     <string name="set_bg_grant">去授权</string>
     <string name="set_bg_restricted">电池优化：受限（后台任务可能停滞）</string>
     <string name="set_bg_oem_note">如果你的系统后台仍然停滞，请在最近任务视图锁定 Qanvas，并在系统省电白名单中允许它（设置 → 电池 → 应用启动管理）。</string>
-    <string name="toast_overlay_perm_needed">后台进度需要悬浮窗权限——没有它生成仍会继续</string>
     <string name="d_paused">后台停滞</string>
     <string name="toast_paused_fmt">完成——后台共停滞 %1$d 秒（可在设置 → 后台运行保障查看）</string>
     <string name="toast_done_plain">完成</string>

@@ -134,6 +134,7 @@ object BgKeepAlive {
         overlayView = null
     }
 
+    @Volatile
     private var overlayView: android.view.View? = null
 
     // ---------------------------------------------------------------- battery

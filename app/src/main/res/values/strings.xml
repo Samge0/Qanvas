@@ -31,8 +31,6 @@
     <string name="storage_low">free up space to continue</string>
 
     <!-- missing-model banner -->
-    <string name="banner_missing">Model not downloaded yet. Download it in Settings first.</string>
-    <string name="banner_action">Go to Settings</string>
 
     <!-- generation controls -->
     <string name="create_placeholder">Describe the image…  e.g. "A neon sign that reads QWEN, rainy night"</string>
@@ -71,8 +69,6 @@
     <!-- gallery -->
     <string name="gallery_empty_title">No creations yet</string>
     <string name="gallery_empty_sub">Generated images land here with full parameters</string>
-    <string name="rec_meta_fmt">%1$s · %2$d×%3$d · %4$d st · seed %5$d</string>
-    <string name="rec_meta2_fmt">%1$s · %2$d s</string>
     <string name="delete_title">Delete this creation?</string>
     <string name="delete_confirm">Delete</string>
     <string name="cancel">Cancel</string>
@@ -82,12 +78,12 @@
     <string name="inspo_sticker">RGBA Stickers</string>
     <string name="inspo_edit">Photo Edits</string>
     <string name="inspo_poster">Typography Posters</string>
-    <string name="inspo_use">Use</string>
 
     <!-- settings: download -->
     <string name="set_download_title">Model download</string>
     <string name="set_download_desc">Qwen-Image-2.1 MNN · int4 · ~10.6 GB download, ~11 GB installed. Includes text-to-image, photo-editing and RGBA-sticker components.\n\nThis is currently the smallest official variant — the 7B DiT int4 (4.3 GB) and the Qwen3-VL-8B text encoder int4 (4.9 GB) dominate the size, and no lighter quantization exists. A text-to-image-only bundle would save only ~0.5 GB.</string>
     <string name="set_download_btn">Download model · 10.6 GB</string>
+    <string name="dl_failed_fmt">Download failed: %1$s</string>
     <string name="set_download_stop">Stop</string>
     <string name="set_download_done">Model downloaded ✓</string>
     <string name="set_download_missing_fmt">Missing files: %1$s</string>
@@ -95,20 +91,15 @@
     <!-- settings: directory -->
     <string name="set_dir_title">Model directory</string>
     <string name="set_dir_current_fmt">Current: %1$s</string>
-    <string name="set_dir_hint">Custom path (must be writable, e.g. a secondary storage getExternalFilesDir path)</string>
-    <string name="set_dir_apply">Use this directory</string>
     <string name="set_dir_reset">Reset to default</string>
-    <string name="set_dir_migrate">Move model files here</string>
     <string name="set_migrating_fmt">Moving… %1$d%%</string>
     <string name="set_dir_note">The native runtime needs a real filesystem path (SAF/cloud providers are not supported). The default app-private storage is recommended for most devices.</string>
     <string name="set_danger_title">Danger zone</string>
     <string name="set_delete_model">Delete model files (free ~11 GB)</string>
     <string name="set_delete_confirm">Delete all model files? You will need to download them again to generate.</string>
     <string name="toast_dir_invalid">Directory is not writable</string>
-    <string name="toast_dir_applied">Model directory updated</string>
     <string name="toast_need_download">Model not ready — download it in Settings first</string>
     <string name="toast_migrate_done">Model files moved</string>
-    <string name="toast_migrate_need_custom">Set a custom directory first</string>
 
     <!-- settings: proxy -->
     <string name="set_proxy_title">Download proxy</string>
@@ -143,7 +134,6 @@
     <string name="migrate_move">Move (fast)</string>
     <string name="migrate_copy">Copy, then clean old</string>
     <string name="reset_dir_confirm">Reset to the default app directory? Files in the custom directory stay in place.</string>
-    <string name="dir_pick_storage_fmt">Storage %1$d</string>
 
     <!-- v1.1.2 additions: gallery detail -->
     <string name="detail_title">Creation details</string>
@@ -186,8 +176,6 @@
     <!-- v1.1.6 additions -->
     <string name="d_delete">Delete</string>
     <string name="d_regen">Regenerate</string>
-    <string name="d_regenerate_confirm_title">Regenerate this creation?</string>
-    <string name="d_regenerate_confirm_body">Runs the same prompt, size, steps and a fresh random seed on the Create tab.</string>
 
     <!-- v1.1.3 additions -->
     <string name="cancel_job">Cancel</string>
@@ -197,7 +185,6 @@
     <string name="save_image">Save</string>
     <string name="toast_saved_ok">Saved to your gallery</string>
     <string name="toast_save_failed">Could not save the image</string>
-    <string name="save_pick_title">Save image</string>
     <string name="busy_block_hint">A generation is running — wait or cancel it first</string>
     <string name="busy_other_tab">Another tab is generating — wait for it to finish (or cancel it there) first</string>
 
@@ -213,7 +200,6 @@
     <string name="set_bg_grant">Grant</string>
     <string name="set_bg_restricted">Battery optimization: restricted (background jobs may stall)</string>
     <string name="set_bg_oem_note">If generation still stalls in the background on your ROM, also lock Qanvas in the recent-apps view and allow it in the system\'s battery saver whitelist (Settings → Battery → App launch).</string>
-    <string name="toast_overlay_perm_needed">Overlay permission needed for background progress — generation still runs without it</string>
     <string name="d_paused">Background stalls</string>
     <string name="toast_paused_fmt">Done — stalled %1$d s in background (check Settings → Background running)</string>
     <string name="toast_done_plain">Done</string>

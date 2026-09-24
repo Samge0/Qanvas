@@ -87,6 +87,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun toast(key: String) { _toast.value = key }
     fun toastShown() { _toast.value = null }
 
+    /** Last download failure message (shown via the __dl_failed__ toast). */
+    var dlError: String? = null
+
     private val _events = MutableStateFlow<UiEvent?>(null)
     val events: StateFlow<UiEvent?> = _events.asStateFlow()
     fun eventHandled() { _events.value = null }
@@ -199,7 +202,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         updTab(tab) { it.copy(gen = st) }
                     GenBus.Kind.DONE -> {
                         val bmp = st.doneFile?.let {
-                            withContext(Dispatchers.IO) { BitmapFactory.decodeFile(it) }
+                            withContext(Dispatchers.IO) { runCatching { BitmapFactory.decodeFile(it) }.getOrNull() }
                         }
                         updTab(tab) { it.copy(gen = st, result = bmp, resultPath = st.doneFile) }
                         refreshGate()
@@ -207,6 +210,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }
                     GenBus.Kind.OOM, GenBus.Kind.ERROR ->
                         updTab(tab) { it.copy(gen = st) }
+                    GenBus.Kind.DL_ERROR -> {
+                        dlError = st.error
+                        _toast.value = "__dl_failed__"
+                        refreshGate()
+                    }
+                    GenBus.Kind.DL_OK -> refreshGate()
                     else -> {}
                 }
             }
@@ -215,10 +224,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Check clipboard for a Qanvas share card (called on each resume). */
     fun checkClipboard() {
-        val cm = getApplication<Application>().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        val text = cm.primaryClip?.getItemAt(0)?.coerceToText(getApplication())?.toString() ?: return
-        if (_clipCard.value != null) return
-        val rec = ShareCard.decode(text) ?: return
+        val rec = runCatching {
+            val cm = getApplication<Application>().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val text = cm.primaryClip?.getItemAt(0)?.coerceToText(getApplication())?.toString() ?: return
+            if (_clipCard.value != null) return
+            ShareCard.decode(text)
+        }.getOrNull() ?: return
         _clipCard.value = rec
     }
 

@@ -45,6 +45,16 @@ class MainActivity : AppCompatActivity() {
         intent?.getIntExtra("open_tab", -1)?.let { tab ->
             if (tab >= 0) openTabRequest = tab
         }
+        // Shared image (ACTION_SEND image/*) → load it as the Edit input.
+        @Suppress("DEPRECATION")
+        val sharedUri = if (Build.VERSION.SDK_INT >= 33)
+            intent?.getParcelableExtra(Intent.EXTRA_STREAM, android.net.Uri::class.java)
+        else
+            intent?.getParcelableExtra(Intent.EXTRA_STREAM)
+        if (intent?.action == Intent.ACTION_SEND && sharedUri != null) {
+            ViewModelProvider(this)[MainViewModel::class.java].pickEditImage(sharedUri)
+            openTabRequest = 2
+        }
     }
 
     companion object {

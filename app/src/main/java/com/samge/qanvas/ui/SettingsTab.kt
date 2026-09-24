@@ -60,6 +60,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.samge.qanvas.BuildConfig
 import com.samge.qanvas.R
 import com.samge.qanvas.core.GenBus
 import com.samge.qanvas.core.GenEngine
@@ -136,10 +137,8 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
                     // switch immediately, then offer migration of existing files
                     prefs.edit().putString(GenEngine.KEY_MODEL_DIR, picked.absolutePath).apply()
                     vm.refreshGate()
-                    if (GenEngine.modelBytes(ctx) > 0 &&
-                        !picked.absolutePath.contains(GenEngine.MODEL_DIR_NAME) == false ||
-                        GenEngine.missingFiles(ctx) != null
-                    ) {
+                    val alreadyThere = GenEngine.missingFiles(ctx) == null
+                    if (GenEngine.modelBytes(ctx) > 0 && !alreadyThere) {
                         migrateChoice = picked
                     } else {
                         vm.toast("__saved__")
@@ -455,13 +454,13 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
         // ---------------- about ----------------
         SettingsCard(title = stringResource(R.string.set_about_title)) {
             Text(
-                stringResource(R.string.set_about_body, "1.1.7"),
+                stringResource(R.string.set_about_body, BuildConfig.VERSION_NAME),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Filled.Language, null, Modifier.size(16.dp), tint = AppleTokens.ActionBlue)
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(6.dp))
                 Text(
                     stringResource(R.string.set_about_repo),
                     style = MaterialTheme.typography.bodyMedium,
@@ -591,13 +590,15 @@ fun FolderPickerDialog(initial: File, onDismiss: () -> Unit, onPicked: (File) ->
                             Text(stringResource(R.string.dir_pick_up))
                         }
                     }
-                    FilterChip(
-                        selected = false,
-                        onClick = {
-                            if (storageRoot.isDirectory) { current = storageRoot; chosen = storageRoot }
-                        },
-                        label = { Text(stringResource(R.string.dir_chip_default)) },
-                    )
+                    if (current != storageRoot) {
+                        FilterChip(
+                            selected = false,
+                            onClick = {
+                                if (storageRoot.isDirectory) { current = storageRoot; chosen = storageRoot }
+                            },
+                            label = { Text(stringResource(R.string.dir_chip_default)) },
+                        )
+                    }
                 }
                 Spacer(Modifier.height(4.dp))
                 LazyColumn(Modifier.height(280.dp)) {

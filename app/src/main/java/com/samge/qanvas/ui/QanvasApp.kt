@@ -83,6 +83,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -136,6 +137,8 @@ fun QanvasRoot(vm: MainViewModel) {
     // toast keys → localized snackbar
     LaunchedEffect(toastMsg) {
         when (toastMsg) {
+            "__dl_failed__" -> snackbar.showSnackbar(ctx.getString(R.string.dl_failed_fmt, vm.dlError ?: ""))
+
             "__need_download__" -> snackbar.showSnackbar(ctx.getString(R.string.toast_need_download))
             "__dir_invalid__" -> snackbar.showSnackbar(ctx.getString(R.string.toast_dir_invalid))
             "__dir_applied__", "__saved__" -> snackbar.showSnackbar(ctx.getString(R.string.toast_saved))
@@ -392,12 +395,12 @@ fun StepsSeedRow(vm: MainViewModel, hint: String) {
 }
 
 @Composable
-fun ProgressCard(gen: GenBus.State, estimateSec: Int, onCancel: (() -> Unit)? = null) {
+fun ProgressCard(gen: GenBus.State, estimateSec: Int, stepsTotal: Int = 20, onCancel: (() -> Unit)? = null) {
     val stageText = when (gen.stageKey.ifEmpty { gen.stage }) {
         "load" -> stringResource(R.string.notif_stage_load)
         "te" -> stringResource(R.string.notif_stage_te)
         "vae" -> stringResource(R.string.notif_stage_vae)
-        "denoise" -> stringResource(R.string.notif_stage_denoise, gen.stageStep, 20)
+        "denoise" -> stringResource(R.string.notif_stage_denoise, gen.stageStep, stepsTotal)
         "" -> stringResource(R.string.progress_preparing)
         else -> gen.stage
     }
@@ -438,7 +441,7 @@ fun ProgressCard(gen: GenBus.State, estimateSec: Int, onCancel: (() -> Unit)? = 
                 modifier = Modifier.fillMaxWidth(),
             )
             Text(
-                stringResource(R.string.progress_note_fmt, estimateSec / 60),
+                stringResource(R.string.progress_note_fmt, (estimateSec + 59) / 60),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -452,9 +455,12 @@ fun ZoomDialog(path: String, onDismiss: () -> Unit) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
-    val bmp = remember(path) {
-        val o = android.graphics.BitmapFactory.Options().apply { inSampleSize = 1 }
-        android.graphics.BitmapFactory.decodeFile(path, o)
+    // decode off the main thread; null while loading or if the file is gone
+    var bmp by remember(path) { mutableStateOf<android.graphics.Bitmap?>(null) }
+    LaunchedEffect(path) {
+        bmp = withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching { android.graphics.BitmapFactory.decodeFile(path) }.getOrNull()
+        }
     }
     // blurred backdrop source (downscaled for cheap blur)
     val backdrop = remember(path) {
@@ -486,9 +492,9 @@ fun ZoomDialog(path: String, onDismiss: () -> Unit) {
                 Box(Modifier.fillMaxSize().background(Color(0x33000000)))
             }
             // the sharp image floats above
-            if (bmp != null) {
+            bmp?.let { b ->
                 Image(
-                    bitmap = bmp.asImageBitmap(),
+                    bitmap = b.asImageBitmap(),
                     contentDescription = null,
                     modifier = Modifier
                         .fillMaxSize()
@@ -612,7 +618,7 @@ fun CreateTab(vm: MainViewModel) {
             val size = QwenImage21SizeProxy.of(ratio, tier)
             StepsSeedRow(
                 vm,
-                stringResource(R.string.size_fmt, size.width, size.height, size.tokens(), GenEngine.estimateSeconds(size.tokens(), steps) / 60),
+                stringResource(R.string.size_fmt, size.width, size.height, size.tokens(), (GenEngine.estimateSeconds(size.tokens(), steps) + 59) / 60),
             )
         }
         item {
@@ -626,7 +632,7 @@ fun CreateTab(vm: MainViewModel) {
         if (GenServiceRunning(gen)) {
             item {
                 val size = QwenImage21SizeProxy.of(ratio, tier)
-                ProgressCard(gen, GenEngine.estimateSeconds(size.tokens(), steps), onCancel = { GenService.requestCancel() })
+                ProgressCard(gen, GenEngine.estimateSeconds(size.tokens(), steps), stepsTotal = steps, onCancel = { GenService.requestCancel() })
             }
         }
         if (gen.kind == GenBus.Kind.OOM) item { OomCard() }
@@ -685,7 +691,7 @@ fun StickerTab(vm: MainViewModel) {
             val size = QwenImage21SizeProxy.of(ratio, tier)
             StepsSeedRow(
                 vm,
-                stringResource(R.string.size_fmt, size.width, size.height, size.tokens(), GenEngine.estimateSeconds(size.tokens(), steps) / 60),
+                stringResource(R.string.size_fmt, size.width, size.height, size.tokens(), (GenEngine.estimateSeconds(size.tokens(), steps) + 59) / 60),
             )
         }
         item {
@@ -699,7 +705,7 @@ fun StickerTab(vm: MainViewModel) {
         if (GenServiceRunning(gen)) {
             item {
                 val size = QwenImage21SizeProxy.of(ratio, tier)
-                ProgressCard(gen, GenEngine.estimateSeconds(size.tokens(), steps), onCancel = { GenService.requestCancel() })
+                ProgressCard(gen, GenEngine.estimateSeconds(size.tokens(), steps), stepsTotal = steps, onCancel = { GenService.requestCancel() })
             }
         }
         if (gen.kind == GenBus.Kind.OOM) item { OomCard() }
@@ -808,7 +814,7 @@ fun EditTab(vm: MainViewModel) {
                 }
             }
         }
-        item { StepsSeedRow(vm, stringResource(R.string.edit_est_fmt, GenEngine.estimateSeconds(800, steps) / 60)) }
+        item { StepsSeedRow(vm, stringResource(R.string.edit_est_fmt, (GenEngine.estimateSeconds(800, steps) + 59) / 60)) }
         item {
             GenerateButton(
                 enabled = editInput != null && prompt.isNotBlank(),
@@ -818,7 +824,7 @@ fun EditTab(vm: MainViewModel) {
             ) { vm.startGeneration(prompt, "edit", editInput, tab = 2) }
         }
         if (GenServiceRunning(gen)) {
-            item { ProgressCard(gen, GenEngine.estimateSeconds(800, steps), onCancel = { GenService.requestCancel() }) }
+            item { ProgressCard(gen, GenEngine.estimateSeconds(800, steps), stepsTotal = steps, onCancel = { GenService.requestCancel() }) }
         }
         if (gen.kind == GenBus.Kind.OOM) item { OomCard() }
         if (gen.kind == GenBus.Kind.ERROR) item { ErrorCard(gen.error ?: "unknown") }
@@ -1300,16 +1306,22 @@ fun MissingModelGate(vm: MainViewModel) {
             }
         }
         item {
+            val dlRunning = gen.kind == GenBus.Kind.DOWNLOADING
             Button(
                 onClick = { vm.startDownload() },
-                enabled = !dl,
+                enabled = !dlRunning,
                 shape = RoundedCornerShape(999.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = AppleTokens.ActionBlue),
                 modifier = Modifier.fillMaxWidth().height(48.dp),
             ) {
-                Icon(Icons.Filled.AutoAwesome, null, Modifier.size(16.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.set_download_btn), fontWeight = FontWeight.Medium, )
+                if (dlRunning) {
+                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
+                    Spacer(Modifier.width(8.dp))
+                } else {
+                    Icon(Icons.Filled.AutoAwesome, null, Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(stringResource(R.string.set_download_btn), fontWeight = FontWeight.Medium)
             }
         }
         item { Spacer(Modifier.height(30.dp)) }
@@ -1385,7 +1397,7 @@ fun GenerateButton(
                 else -> onClick()
             }
         },
-        enabled = modelReady,
+        enabled = enabled && modelReady && !running,
         shape = RoundedCornerShape(999.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = if (crossTabBusy) MaterialTheme.colorScheme.surfaceVariant else AppleTokens.ActionBlue,
