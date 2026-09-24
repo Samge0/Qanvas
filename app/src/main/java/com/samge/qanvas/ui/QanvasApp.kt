@@ -254,9 +254,9 @@ fun QanvasRoot(vm: MainViewModel) {
                 )
             }
             when (tab) {
-                0 -> if (gate.modelPresent) CreateTab(vm, gen) else MissingModelGate(vm)
-                1 -> if (gate.modelPresent) StickerTab(vm, gen) else MissingModelGate(vm)
-                2 -> if (gate.modelPresent) EditTab(vm, gen) else MissingModelGate(vm)
+                0 -> if (gate.modelPresent) CreateTab(vm) else MissingModelGate(vm)
+                1 -> if (gate.modelPresent) StickerTab(vm) else MissingModelGate(vm)
+                2 -> if (gate.modelPresent) EditTab(vm) else MissingModelGate(vm)
                 3 -> GalleryTab(vm, onOpen = { showDetail = it })
                 4 -> InspoTab(vm)
                 5 -> SettingsTab(vm, gen)
@@ -539,11 +539,15 @@ fun ResultCard(bitmap: android.graphics.Bitmap?, outPath: String? = null, checke
 // ==================================================================== tabs (Create / Sticker / Edit)
 
 @Composable
-fun CreateTab(vm: MainViewModel, gen: GenBus.State) {
+fun CreateTab(vm: MainViewModel) {
     val ratio by vm.ratioOrdinal.collectAsState()
     val tier by vm.tierOrdinal.collectAsState()
     val steps by vm.steps.collectAsState()
-    val result by vm.result.collectAsState()
+    val ui by vm.tabUi.collectAsState()
+    val tabState = ui[0] ?: TabGenUi()
+    val gen = tabState.gen
+    val result = tabState.result
+    val resultPath = tabState.resultPath
     val modelReady = vm.gate.collectAsState().value.modelPresent
     val prefill by vm.prefillPrompt.collectAsState()
     var prompt by rememberSaveable { mutableStateOf("") }
@@ -552,8 +556,6 @@ fun CreateTab(vm: MainViewModel, gen: GenBus.State) {
     LaunchedEffect(prefill) {
         if (prefill != null) { prompt = prefill!!; vm.consumePrefill() }
     }
-
-    val resultPath: String? = vm.gen.collectAsState().value.doneFile
 
     LazyColumn(
         Modifier.fillMaxSize().padding(horizontal = 20.dp),
@@ -583,7 +585,7 @@ fun CreateTab(vm: MainViewModel, gen: GenBus.State) {
                 enabled = prompt.isNotBlank() && !GenServiceRunning(gen) && modelReady,
                 running = GenServiceRunning(gen),
                 modelReady = modelReady,
-            ) { vm.startGeneration(prompt, "t2i", null) }
+            ) { vm.startGeneration(prompt, "t2i", null, tab = 0) }
         }
         if (GenServiceRunning(gen)) {
             item {
@@ -600,11 +602,15 @@ fun CreateTab(vm: MainViewModel, gen: GenBus.State) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun StickerTab(vm: MainViewModel, gen: GenBus.State) {
+fun StickerTab(vm: MainViewModel) {
     val ratio by vm.ratioOrdinal.collectAsState()
     val tier by vm.tierOrdinal.collectAsState()
     val steps by vm.steps.collectAsState()
-    val result by vm.result.collectAsState()
+    val ui by vm.tabUi.collectAsState()
+    val tabState = ui[1] ?: TabGenUi()
+    val gen = tabState.gen
+    val result = tabState.result
+    val resultPath = tabState.resultPath
     val modelReady = vm.gate.collectAsState().value.modelPresent
     val prefill by vm.prefillPrompt.collectAsState()
     var prompt by rememberSaveable { mutableStateOf(Inspo.byKind(Inspo.Kind.STICKER).first().promptFor(Inspo.isZh())) }
@@ -612,8 +618,6 @@ fun StickerTab(vm: MainViewModel, gen: GenBus.State) {
     LaunchedEffect(prefill) {
         if (prefill != null) { prompt = prefill!!; vm.consumePrefill() }
     }
-
-    val resultPath: String? = vm.gen.collectAsState().value.doneFile
 
     LazyColumn(
         Modifier.fillMaxSize().padding(horizontal = 20.dp),
@@ -653,7 +657,7 @@ fun StickerTab(vm: MainViewModel, gen: GenBus.State) {
                 enabled = prompt.isNotBlank() && !GenServiceRunning(gen) && modelReady,
                 running = GenServiceRunning(gen),
                 modelReady = modelReady,
-            ) { vm.startGeneration(prompt, "t2i", null) }
+            ) { vm.startGeneration(prompt, "t2i", null, tab = 1) }
         }
         if (GenServiceRunning(gen)) {
             item {
@@ -669,11 +673,15 @@ fun StickerTab(vm: MainViewModel, gen: GenBus.State) {
 }
 
 @Composable
-fun EditTab(vm: MainViewModel, gen: GenBus.State) {
+fun EditTab(vm: MainViewModel) {
     val editInput by vm.editInput.collectAsState()
     val tier by vm.tierOrdinal.collectAsState()
     val steps by vm.steps.collectAsState()
-    val result by vm.result.collectAsState()
+    val ui by vm.tabUi.collectAsState()
+    val tabState = ui[2] ?: TabGenUi()
+    val gen = tabState.gen
+    val result = tabState.result
+    val resultPath = tabState.resultPath
     val modelReady = vm.gate.collectAsState().value.modelPresent
     var prompt by rememberSaveable { mutableStateOf("") }
     val pick = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -769,14 +777,14 @@ fun EditTab(vm: MainViewModel, gen: GenBus.State) {
                 enabled = editInput != null && prompt.isNotBlank() && !GenServiceRunning(gen) && modelReady,
                 running = GenServiceRunning(gen),
                 modelReady = modelReady,
-            ) { vm.startGeneration(prompt, "edit", editInput) }
+            ) { vm.startGeneration(prompt, "edit", editInput, tab = 2) }
         }
         if (GenServiceRunning(gen)) {
             item { ProgressCard(gen, GenEngine.estimateSeconds(800, steps), onCancel = { GenService.requestCancel() }) }
         }
         if (gen.kind == GenBus.Kind.OOM) item { OomCard() }
         if (gen.kind == GenBus.Kind.ERROR) item { ErrorCard(gen.error ?: "unknown") }
-        item { ResultCard(result) }
+        item { ResultCard(result, resultPath) }
         item { Spacer(Modifier.height(30.dp)) }
     }
 }

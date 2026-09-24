@@ -55,6 +55,7 @@ class GenService : Service() {
         const val X_SEED = "seed"
         const val X_INPUT = "input"
         const val X_OUT = "out"
+        const val X_TAB = "tab"
 
         /** Cooperative cancellation flag for the running generation. */
         @Volatile
@@ -86,7 +87,7 @@ class GenService : Service() {
         fun startGeneration(
             context: Context, prompt: String, mode: String,
             ratio: Int, tier: Int, steps: Int, seed: Long,
-            input: String?, out: String,
+            input: String?, out: String, tab: Int,
         ) {
             val i = Intent(context, GenService::class.java).apply {
                 action = ACTION_GENERATE
@@ -98,6 +99,7 @@ class GenService : Service() {
                 putExtra(X_SEED, seed)
                 if (input != null) putExtra(X_INPUT, input)
                 putExtra(X_OUT, out)
+                putExtra(X_TAB, tab)
             }
             ContextCompat.startForegroundService(context, i)
         }
@@ -180,6 +182,7 @@ class GenService : Service() {
                     seed = intent.getLongExtra(X_SEED, 42),
                     inputPath = intent.getStringExtra(X_INPUT),
                     out = File(out),
+                    tab = intent.getIntExtra(X_TAB, 0),
                 )
             }
         }
@@ -238,7 +241,7 @@ class GenService : Service() {
 
     private fun runGeneration(
         prompt: String, mode: String, ratioOrd: Int, tierOrd: Int,
-        steps: Int, seed: Long, inputPath: String?, out: File,
+        steps: Int, seed: Long, inputPath: String?, out: File, tab: Int,
     ) {
         if (running) {
             GenBus.post(GenBus.State(GenBus.Kind.ERROR, error = "another job is running"))
@@ -287,7 +290,7 @@ class GenService : Service() {
                     threads = 4
                     crashMarkerFile = File(filesDir, "generation_in_progress.txt")
                 }
-                GenBus.post(GenBus.State(GenBus.Kind.LOADING, stage = "load"))
+                GenBus.post(GenBus.State(GenBus.Kind.LOADING, stage = "load", originTab = tab))
 
                 // hot path: reuse the loaded instance; cold path: create (and keep or close)
                 val qi: QwenImage21 = synchronized(hotLock) {
@@ -363,12 +366,13 @@ class GenService : Service() {
                 val dur = endMs - perf
                 if (doneFile != null) {
                     GenBus.post(GenBus.State(GenBus.Kind.DONE, 100, "done",
-                        doneFile = doneFile!!.absolutePath, pausedMs = pausedMs))
+                        doneFile = doneFile!!.absolutePath, pausedMs = pausedMs, originTab = tab))
                 } else if (cancelledByUser) {
-                    GenBus.post(GenBus.State(GenBus.Kind.ERROR, error = "__cancelled__"))
+                    GenBus.post(GenBus.State(GenBus.Kind.ERROR, error = "__cancelled__", originTab = tab))
                 } else {
                     GenBus.post(
-                        GenBus.State(if (oom) GenBus.Kind.OOM else GenBus.Kind.ERROR, error = error ?: "unknown")
+                        GenBus.State(if (oom) GenBus.Kind.OOM else GenBus.Kind.ERROR,
+                            error = error ?: "unknown", originTab = tab)
                     )
                 }
                 try {

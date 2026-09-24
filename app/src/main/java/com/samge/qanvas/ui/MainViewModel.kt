@@ -40,6 +40,13 @@ data class GateStatus(
 
 data class PickedImage(val uri: Uri, val width: Int, val height: Int, val cachePath: String)
 
+/** Per-tab generation UI state: each tab owns its own progress/result/error view. */
+data class TabGenUi(
+    val gen: GenBus.State = GenBus.State(),
+    val result: Bitmap? = null,
+    val resultPath: String? = null,
+)
+
 /** Cross-tab command bus: inspo → create, detail → edit, notification tap, clipboard card. */
 sealed class UiEvent {
     data class GoTab(val tab: Int) : UiEvent()
@@ -63,8 +70,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val history: StateFlow<List<GenRecord>> = db.dao().recent()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(3000), emptyList())
 
-    private val _result = MutableStateFlow<Bitmap?>(null)
-    val result: StateFlow<Bitmap?> = _result.asStateFlow()
+    private val _tabUi = MutableStateFlow(mapOf<Int, TabGenUi>())
+    val tabUi: StateFlow<Map<Int, TabGenUi>> = _tabUi.asStateFlow()
+
+    fun uiFor(tab: Int): TabGenUi = _tabUi.value[tab] ?: TabGenUi()
+
+    private fun updTab(tab: Int, transform: (TabGenUi) -> TabGenUi) {
+        _tabUi.value = _tabUi.value.toMutableMap().apply { set(tab, transform(get(tab) ?: TabGenUi())) }
+    }
 
     private val _editInput = MutableStateFlow<PickedImage?>(null)
     val editInput: StateFlow<PickedImage?> = _editInput.asStateFlow()
@@ -138,7 +151,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun startDownload() = GenService.startDownload(getApplication())
 
-    fun startGeneration(prompt: String, mode: String, input: PickedImage?) {
+    fun startGeneration(prompt: String, mode: String, input: PickedImage?, tab: Int) {
         val app = getApplication<Application>()
         if (GenService.running) return
         prefs.edit()
@@ -149,7 +162,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             .apply()
         val seed = seedText.value.trim().toLongOrNull() ?: (System.currentTimeMillis() % 1_000_000L)
         val out = GenEngine.newOutputFile(app)
-        _result.value = null
+        updTab(tab) { it.copy(gen = GenBus.State(GenBus.Kind.LOADING, originTab = tab), result = null, resultPath = null) }
         GenService.startGeneration(
             context = app,
             prompt = prompt,
@@ -160,19 +173,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             seed = seed,
             input = input?.cachePath,
             out = out.absolutePath,
+            tab = tab,
         )
     }
 
     fun collectResult() {
         viewModelScope.launch {
             gen.collect { st ->
-                if (st.kind == GenBus.Kind.DONE && st.doneFile != null) {
-                    val bmp = withContext(Dispatchers.IO) {
-                        BitmapFactory.decodeFile(st.doneFile)
+                val tab = if (st.originTab in 0..2) st.originTab else 0
+                when (st.kind) {
+                    GenBus.Kind.LOADING, GenBus.Kind.GENERATING ->
+                        updTab(tab) { it.copy(gen = st) }
+                    GenBus.Kind.DONE -> {
+                        val bmp = st.doneFile?.let {
+                            withContext(Dispatchers.IO) { BitmapFactory.decodeFile(it) }
+                        }
+                        updTab(tab) { it.copy(gen = st, result = bmp, resultPath = st.doneFile) }
+                        refreshGate()
+                        _toast.value = if (st.pausedMs > 1000) "__paused__:${st.pausedMs / 1000}" else "__done__"
                     }
-                    _result.value = bmp
-                    refreshGate()
-                    _toast.value = if (st.pausedMs > 1000) "__paused__:${st.pausedMs / 1000}" else "__done__"
+                    GenBus.Kind.OOM, GenBus.Kind.ERROR ->
+                        updTab(tab) { it.copy(gen = st) }
+                    else -> {}
                 }
             }
         }

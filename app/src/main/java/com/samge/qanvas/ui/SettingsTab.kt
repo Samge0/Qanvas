@@ -59,6 +59,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.samge.qanvas.R
 import com.samge.qanvas.core.GenBus
 import com.samge.qanvas.core.GenEngine
@@ -197,18 +198,20 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
                 OutlinedButton(
                     onClick = { GenService.requestStop(ctx) },
                     shape = RoundedCornerShape(999.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text(stringResource(R.string.set_download_stop)) }
+                    modifier = Modifier.fillMaxWidth().height(40.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 4.dp),
+                ) { Text(stringResource(R.string.set_download_stop), fontSize = 13.sp, maxLines = 1) }
             } else {
                 Button(
                     onClick = { vm.startDownload() },
                     shape = RoundedCornerShape(999.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = AppleTokens.ActionBlue),
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    modifier = Modifier.fillMaxWidth().height(44.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 4.dp),
                 ) {
-                    Icon(Icons.Filled.AutoAwesome, null, Modifier.size(16.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.set_download_btn))
+                    Icon(Icons.Filled.AutoAwesome, null, Modifier.size(14.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.set_download_btn), fontSize = 13.sp, maxLines = 1, softWrap = false)
                 }
             }
         }
@@ -235,16 +238,18 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
                     },
                     enabled = migrating == null && gen.kind != GenBus.Kind.DOWNLOADING,
                     shape = RoundedCornerShape(999.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 6.dp),
                 ) {
-                    Icon(Icons.Filled.FolderOpen, null, Modifier.size(16.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.set_dir_pick))
+                    Icon(Icons.Filled.FolderOpen, null, Modifier.size(14.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.set_dir_pick), fontSize = 13.sp, maxLines = 1, softWrap = false)
                 }
                 if (currentCustom.isNotBlank()) {
                     OutlinedButton(
                         onClick = { confirmResetDir = true },
                         shape = RoundedCornerShape(999.dp),
-                    ) { Text(stringResource(R.string.set_dir_reset)) }
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                    ) { Text(stringResource(R.string.set_dir_reset), fontSize = 13.sp, maxLines = 1, softWrap = false) }
                 }
             }
             if (migrating != null) {
@@ -431,17 +436,20 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
                 onClick = { confirmDelete = true },
                 enabled = gate.modelPresent,
                 shape = RoundedCornerShape(999.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 6.dp),
             ) {
-                Icon(Icons.Filled.Delete, null, Modifier.size(16.dp), tint = AppleTokens.Red)
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.set_delete_model), color = AppleTokens.Red)
+                Icon(Icons.Filled.Delete, null, Modifier.size(14.dp), tint = AppleTokens.Red)
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.set_delete_model), color = AppleTokens.Red,
+                    fontSize = 13.sp, maxLines = 1, softWrap = false,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Visible)
             }
         }
 
         // ---------------- about ----------------
         SettingsCard(title = stringResource(R.string.set_about_title)) {
             Text(
-                stringResource(R.string.set_about_body, "1.1.4"),
+                stringResource(R.string.set_about_body, "1.1.5"),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

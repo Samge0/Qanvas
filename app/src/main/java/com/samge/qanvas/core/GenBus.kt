@@ -29,6 +29,8 @@ object GenBus {
         val stageStep: Int = 0,
         /** total ms the process appeared frozen/throttled during this job */
         val pausedMs: Long = 0,
+        /** tab that initiated this job (0=create, 1=sticker, 2=edit); -1 = none */
+        val originTab: Int = -1,
     )
 
     private val _state = MutableStateFlow(State())

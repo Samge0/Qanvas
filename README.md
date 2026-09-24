@@ -26,6 +26,31 @@ Built on [evankuo/Qwen-Image-2.1-MNN](https://huggingface.co/evankuo/Qwen-Image-
 Long jobs run in a **foreground service** — a 7.5-minute generation survives screen-off and app
 switching, with stage progress in the notification ("Text encoder → Denoising 7/20 → VAE decode").
 
+## Background generation & aggressive ROMs
+
+A full-size generation takes 3–9 minutes. Qanvas runs it in a foreground service and applies
+every standard mitigation so it keeps running when you switch apps:
+
+- **Partial wake lock** held for the whole job (CPU stays up with screen off)
+- **Silent-audio keep-alive** — a muted looping player puts the process in the "playing media"
+  class, which no OEM freezer (MIUI/HyperOS, ColorOS, One UI …) suspends
+- **Floating progress pill** — a small overlay ("Qanvas · 37%") keeps a visible window, so the
+  GPU scheduler never starves our OpenCL command stream; you also get live progress over any app
+- **Battery-optimization exemption** + overlay permission, both one tap from
+  *Settings → Background running*
+
+If progress still stalls on your ROM (you'll see the completion toast report
+"stalled N s in background"):
+
+1. Grant the two permissions in *Settings → Background running*
+2. Lock Qanvas in the recents view (pull down on its card → lock 🔒)
+3. Allow it under *Settings → Battery → App launch* (disable "auto manage")
+4. **Best guarantee**: launch Qanvas in a **free-form / floating window** if your ROM supports
+   it (most MIUI/HyperOS, ColorOS and HarmonyOS devices do — recents → app card → floating
+   window icon). A floating window keeps the app visibly on screen next to whatever you're
+   doing, so generation runs at full speed with zero freezing — and the progress pill isn't
+   even needed.
+
 ## Requirements
 
 - arm64 Android 8.0+ (API 26) with an OpenCL GPU
