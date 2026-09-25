@@ -169,6 +169,9 @@ class GenService : Service() {
     private var downloader: ModelDownloader? = null
     /** Cancellation hook for the app-level mirror downloader. */
     private var mirrorCancel: (() -> Unit)? = null
+    /** True while a model download (not generation) owns this service. */
+    @Volatile
+    private var downloading = false
     private lateinit var notifMgr: NotificationManager
 
     // ---------------------------------------------------------------- lifecycle
@@ -193,13 +196,16 @@ class GenService : Service() {
                 // We were started via startForegroundService but never promoted
                 // ourselves — do it now to satisfy the 5s promotion contract.
                 startForeground(NOTIF_GEN, notif(CH_GEN, getString(R.string.notif_title), "", 0, true, NOTIF_REQ_GEN))
-                // hard-kill the running job (generation or download)
                 job?.cancel()
-                if (running) {
-                    killRunning(this)
-                } else {
+                if (downloading) {
+                    // model download: cancel via the downloader's own flag (the
+                    // only way to break its blocking socket-read loop)
                     downloader?.cancel()
                     mirrorCancel?.invoke()
+                    cancelled.set(true)
+                } else if (running) {
+                    killRunning(this)
+                } else {
                     cancelled.set(true)
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelf()
@@ -255,8 +261,10 @@ class GenService : Service() {
     // ---------------------------------------------------------------- download
 
     private fun runDownload() {
-        if (running) return
+        if (running || downloading) return
+        downloading = true
         running = true
+        cancelled.set(false)
         job = scope.launch {
             val wl = androidx.core.content.ContextCompat.getSystemService(
                 this@GenService, android.os.PowerManager::class.java
@@ -301,6 +309,7 @@ class GenService : Service() {
                 }
             } finally {
                 running = false
+                downloading = false
                 downloader = null
                 mirrorCancel = null
                 runCatching { if (wl.isHeld) wl.release() }

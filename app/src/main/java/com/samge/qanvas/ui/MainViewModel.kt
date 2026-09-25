@@ -214,7 +214,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }
                     GenBus.Kind.DL_ERROR -> {
                         dlError = st.error
-                        _toast.value = "__dl_failed__"
+                        _toast.value = if (st.error == "cancelled") "__dl_cancelled__" else "__dl_failed__"
+                        // reset the downloading UI state (progress card → idle)
+                        GenBus.reset()
                         refreshGate()
                     }
                     GenBus.Kind.DL_OK -> refreshGate()

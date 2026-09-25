@@ -86,6 +86,7 @@
     <string name="set_download_title">Model download</string>
     <string name="set_download_desc">Qwen-Image-2.1 MNN · int4 · ~10.6 GB download, ~11 GB installed. Includes text-to-image, photo-editing and RGBA-sticker components.\n\nThis is currently the smallest official variant — the 7B DiT int4 (4.3 GB) and the Qwen3-VL-8B text encoder int4 (4.9 GB) dominate the size, and no lighter quantization exists. A text-to-image-only bundle would save only ~0.5 GB.</string>
     <string name="set_download_btn">Download model · 10.6 GB</string>
+    <string name="dl_cancelled">Download cancelled</string>
     <string name="dl_failed_fmt">Download failed: %1$s</string>
     <string name="set_download_stop">Stop</string>
     <string name="set_download_done">Model downloaded ✓</string>

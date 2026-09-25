@@ -140,6 +140,7 @@ fun QanvasRoot(vm: MainViewModel) {
     LaunchedEffect(toastMsg) {
         when (toastMsg) {
             "__dl_failed__" -> snackbar.showSnackbar(ctx.getString(R.string.dl_failed_fmt, vm.dlError ?: ""))
+            "__dl_cancelled__" -> snackbar.showSnackbar(ctx.getString(R.string.dl_cancelled))
 
             "__need_download__" -> snackbar.showSnackbar(ctx.getString(R.string.toast_need_download))
             "__dir_invalid__" -> snackbar.showSnackbar(ctx.getString(R.string.toast_dir_invalid))

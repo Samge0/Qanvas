@@ -86,6 +86,7 @@
     <string name="set_download_title">模型下载</string>
     <string name="set_download_desc">Qwen-Image-2.1 MNN · int4 · 下载约 10.6 GB，安装约 11 GB。包含文生图、照片编辑与透明贴纸全部组件。\n\n这是目前最小的官方变体——体积大头是 7B DiT int4（4.3 GB）和 Qwen3-VL-8B 文本编码器 int4（4.9 GB），尚无更轻的量化版本；仅保留文生图的组合也只能省约 0.5 GB。</string>
     <string name="set_download_btn">下载模型 · 10.6 GB</string>
+    <string name="dl_cancelled">已取消下载</string>
     <string name="dl_failed_fmt">下载失败：%1$s</string>
     <string name="set_download_stop">停止</string>
     <string name="set_download_done">模型已下载 ✓</string>
