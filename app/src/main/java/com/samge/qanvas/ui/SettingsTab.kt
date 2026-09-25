@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,8 +21,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
@@ -34,6 +37,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -164,6 +169,52 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(4.dp))
+            if (!gate.modelPresent && gen.kind != GenBus.Kind.DOWNLOADING) {
+                // source picker: mirror default (CN-friendly), switchable any time
+                var srcExpanded by remember { mutableStateOf(false) }
+                var srcSel by remember { mutableStateOf(GenEngine.dlSource(ctx)) }
+                Text(
+                    stringResource(R.string.set_dl_source),
+                    style = MaterialTheme.typography.labelMedium,
+                )
+                Box {
+                    OutlinedButton(
+                        onClick = { srcExpanded = true },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().height(40.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 4.dp),
+                    ) {
+                        Text(srcSel.label, fontSize = 13.sp, maxLines = 1)
+                        Spacer(Modifier.weight(1f))
+                        Icon(Icons.Filled.ArrowDropDown, null, Modifier.size(16.dp))
+                    }
+                    DropdownMenu(expanded = srcExpanded, onDismissRequest = { srcExpanded = false }) {
+                        GenEngine.DlSource.entries.forEach { s ->
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text(s.label, style = MaterialTheme.typography.bodyMedium)
+                                        Text(
+                                            stringResource(
+                                                if (s == GenEngine.DlSource.MIRROR) R.string.set_dl_src_mirror_hint
+                                                else R.string.set_dl_src_hf_hint
+                                            ),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                },
+                                trailingIcon = { if (s == srcSel) Icon(Icons.Filled.Check, null, Modifier.size(16.dp)) },
+                                onClick = {
+                                    srcSel = s
+                                    GenEngine.setDlSource(ctx, s)
+                                    srcExpanded = false
+                                },
+                            )
+                        }
+                    }
+                }
+            }
             if (gate.modelPresent) {
                 StatusRow(ok = true, text = stringResource(R.string.set_download_done))
             } else if (gen.kind != GenBus.Kind.DOWNLOADING) {

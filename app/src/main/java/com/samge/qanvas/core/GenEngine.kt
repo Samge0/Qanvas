@@ -24,6 +24,7 @@ object GenEngine {
     const val KEY_KEEP_LOADED = "keep_models_loaded"
     const val KEY_BG_SILENT = "bg_silent_keepalive"
     const val KEY_BG_OVERLAY = "bg_progress_overlay"
+    const val KEY_DL_SOURCE = "dl_source" // 0 = huggingface.co, 1 = hf-mirror.com
 
     fun prefs(context: Context) =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -73,6 +74,22 @@ object GenEngine {
     }
 
     fun makeDownloader(): ModelDownloader = ModelDownloader()
+
+    /** Download sources: official HF, or the hf-mirror.com CN mirror (same repo,
+     *  byte-identical files, URL layout identical — only the host differs). */
+    enum class DlSource(val label: String, val host: String) {
+        HF("huggingface.co", "https://huggingface.co/"),
+        MIRROR("hf-mirror.com", "https://hf-mirror.com/"),
+    }
+
+    fun dlSource(context: Context): DlSource {
+        val ord = prefs(context).getInt(KEY_DL_SOURCE, 1) // mirror default: CN-friendly
+        return if (ord == 0) DlSource.HF else DlSource.MIRROR
+    }
+
+    fun setDlSource(context: Context, src: DlSource) {
+        prefs(context).edit().putInt(KEY_DL_SOURCE, if (src == DlSource.HF) 0 else 1).apply()
+    }
 
     /**
      * Progress percent → human stage label (i18n happens in the UI layer).

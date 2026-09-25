@@ -167,6 +167,8 @@ class GenService : Service() {
     private var job: Job? = null
     private val cancelled = AtomicBoolean(false)
     private var downloader: ModelDownloader? = null
+    /** Cancellation hook for the app-level mirror downloader. */
+    private var mirrorCancel: (() -> Unit)? = null
     private lateinit var notifMgr: NotificationManager
 
     // ---------------------------------------------------------------- lifecycle
@@ -197,6 +199,7 @@ class GenService : Service() {
                     killRunning(this)
                 } else {
                     downloader?.cancel()
+                    mirrorCancel?.invoke()
                     cancelled.set(true)
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelf()
@@ -267,14 +270,27 @@ class GenService : Service() {
                     System.setProperty("https.proxyHost", proxy.first)
                     System.setProperty("https.proxyPort", proxy.second.toString())
                 }
-                val d = ModelDownloader()
-                downloader = d
-                GenBus.post(GenBus.State(GenBus.Kind.DOWNLOADING, 0, detail = "__preparing__"))
-                d.download(GenEngine.modelDir(this@GenService)) { file, done, total ->
+                val src = GenEngine.dlSource(this@GenService)
+                val progress: (String, Long, Long) -> Unit = { file, done, total ->
                     val pct = (100L * done / total.coerceAtLeast(1L)).toInt()
                     val detail = String.format(java.util.Locale.US, "%.2f/%.2f GB", done / 1e9, total / 1e9)
                     notifyProgress(NOTIF_DL, CH_DL, "dl", detail, pct)
                     GenBus.post(GenBus.State(GenBus.Kind.DOWNLOADING, pct, file, detail = detail))
+                }
+                if (src == GenEngine.DlSource.MIRROR) {
+                    val md = MirrorDownloader(src.host)
+                    mirrorCancel = { md.cancel() }
+                    GenBus.post(GenBus.State(GenBus.Kind.DOWNLOADING, 0, detail = "__preparing__"))
+                    md.download(GenEngine.modelDir(this@GenService)) { rel, done, total ->
+                        progress(if (rel.startsWith("verifying")) rel.removePrefix("verifying") else rel, done, total)
+                    }
+                } else {
+                    val d = ModelDownloader()
+                    downloader = d
+                    GenBus.post(GenBus.State(GenBus.Kind.DOWNLOADING, 0, detail = "__preparing__"))
+                    d.download(GenEngine.modelDir(this@GenService)) { file, done, total ->
+                        progress(file, done, total)
+                    }
                 }
                 GenBus.post(GenBus.State(GenBus.Kind.DL_OK))
             } catch (e: Exception) {
@@ -285,6 +301,8 @@ class GenService : Service() {
                 }
             } finally {
                 running = false
+                downloader = null
+                mirrorCancel = null
                 runCatching { if (wl.isHeld) wl.release() }
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
