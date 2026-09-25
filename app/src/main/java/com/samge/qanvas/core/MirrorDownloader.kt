@@ -45,28 +45,51 @@ class MirrorDownloader(private val host: String) {
         return conn
     }
 
+    /**
+     * Authoritative metadata. hf-mirror's first hop may return a bare 308 with
+     * NO X-Linked-* headers (HF always sends them), and the FINAL CDN response's
+     * ETag is the xet OID — NOT sha256(content). So we walk the redirect chain
+     * manually and take the first X-Linked-Etag seen on any hop (that is the
+     * content hash the AAR validates against); fall back to the last response.
+     */
     private fun remote(rel: String): Remote {
-        val conn = open(rel)
-        conn.instanceFollowRedirects = false
-        conn.requestMethod = "HEAD"
-        try {
-            val code = conn.responseCode
-            if (code != 200) {
+        var url: String = host + REPO_PATH + rel
+        var hops = 0
+        while (true) {
+            val conn = URL(url).openConnection() as HttpURLConnection
+            conn.setRequestProperty("Accept-Encoding", "identity")
+            conn.setRequestProperty("Range", "bytes=0-0")
+            conn.instanceFollowRedirects = false
+            conn.connectTimeout = 30_000
+            conn.readTimeout = 60_000
+            try {
+                val code = conn.responseCode
                 if (code in 300..399) {
-                    // hf-mirror answers HEAD on /resolve with a redirect to the CDN
-                    return Remote(conn.getHeaderField("Content-Length")?.toLongOrNull() ?: 0,
-                        conn.getHeaderField("X-Linked-ETag") ?: conn.getHeaderField("ETag") ?: "")
+                    val next = conn.getHeaderField("Location") ?: throw IOException("redirect without Location for $rel")
+                    val linkedEtag = conn.getHeaderField("X-Linked-Etag")
+                    val linkedSize = conn.getHeaderField("X-Linked-Size")?.toLongOrNull()
+                    // always resolve (Location may be relative)
+                    url = URL(URL(url), next).toString()
+                    if (linkedEtag != null && linkedSize != null) {
+                        return Remote(linkedSize, normalizeEtag(linkedEtag))
+                    }
+                    if (++hops > 5) throw IOException("too many redirects for $rel")
+                    continue
                 }
-                throw IOException("HTTP $code for $rel")
+                if (code != 200 && code != 206) throw IOException("HTTP $code for $rel")
+                var etag = conn.getHeaderField("X-Linked-Etag") ?: conn.getHeaderField("ETag")
+                    ?: throw IOException("no etag for $rel")
+                val size = conn.getHeaderField("Content-Range")?.substringAfterLast('/')?.toLongOrNull()
+                    ?: conn.getHeaderField("Content-Length")?.toLongOrNull() ?: 0
+                return Remote(size, normalizeEtag(etag))
+            } finally {
+                conn.disconnect()
             }
-            return Remote(
-                conn.getHeaderField("Content-Length")?.toLongOrNull() ?: 0,
-                conn.getHeaderField("X-Linked-ETag") ?: conn.getHeaderField("ETag") ?: "",
-            )
-        } finally {
-            conn.disconnect()
         }
     }
+
+    private fun normalizeEtag(e: String): String =
+        e.replace("W/", "").replace("\"", "").trim().lowercase()
 
     fun download(dir: File, cb: (rel: String, done: Long, total: Long) -> Unit) {
         cancelled = false
@@ -131,10 +154,18 @@ class MirrorDownloader(private val host: String) {
     companion object {
         const val REPO_PATH = "evankuo/Qwen-Image-2.1-MNN/resolve/main/"
 
+        /** Mirrors the AAR's checksum semantics exactly:
+         *  - 64-hex etag (LFS): plain SHA-256 of the file content
+         *  - 40-hex etag (git blob): SHA-1 of "blob <size>\0" + content */
         private fun digestMatches(f: File, etag: String, algo: String): Boolean {
             val clean = etag.trim().trim('"')
             if (clean.length != if (algo == "SHA-256") 64 else 40) return false
             val md = MessageDigest.getInstance(algo)
+            if (algo == "SHA-1") {
+                // git blob header: "blob <size>" + NUL byte
+                md.update("blob ${f.length()}".toByteArray(Charsets.US_ASCII))
+                md.update(0)
+            }
             f.inputStream().use { ins ->
                 val buf = ByteArray(1 shl 20)
                 while (true) {
