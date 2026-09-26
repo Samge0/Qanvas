@@ -23,8 +23,8 @@ android {
         applicationId = "com.samge.qanvas"
         minSdk = 26
         targetSdk = 35
-        versionCode = 12
-        versionName = "1.1.10"
+        versionCode = 13
+        versionName = "1.1.11"
         ndk {
             // arm64 only: the MNN runtime ships arm64-v8a .so files
             abiFilters += listOf("arm64-v8a")
