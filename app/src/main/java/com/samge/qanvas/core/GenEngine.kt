@@ -45,8 +45,48 @@ object GenEngine {
 
     fun availableMemoryMB(): Int = QwenImage21.availableMemoryMB()
 
-    /** True when the device offers the recommended RAM headroom (12 GB+ class). */
     fun ramOk(): Boolean = availableMemoryMB() >= 10_500
+
+    // ---- device compatibility analysis -------------------------------------
+    // Thresholds replicated from libMNN's QwenImage21Diffusion::ensureMemory
+    // (verified by disassembly): a stage passes when
+    //   MemAvailable >= stageNeedMB + 400 MB headroom.
+    // Stage needs: text-encoder load 5600 (fixed), DiT denoise
+    // 5000 + size-dependent term (Tiny ≈ 5600-5800), VAE decode
+    // formula + 500. The TE gate is parameter-independent, so it is the
+    // make-or-break check for low-RAM devices.
+
+    /** Minimum MemAvailable that clears the hard text-encoder gate. */
+    const val MIN_TE_MEM_MB: Int = 5600 + 400
+
+    /** MemAvailable needed for the largest tier (safe upper bound for all stages). */
+    const val RECOMMENDED_MEM_MB: Int = 10_500
+
+    data class MemCheck(
+        val availableMB: Int,
+        val totalMB: Int,
+        val passesHardGate: Boolean,     // >= 6000 MB: Tiny/Fast will run
+        val comfortable: Boolean,        // >= 10.5 GB: all tiers comfortable
+        val teNeedMB: Int = 5600,
+        val headroomMB: Int = 400,
+    ) {
+        val headroomLeftMB: Int get() = availableMB - (teNeedMB + headroomMB)
+    }
+
+    fun memCheck(context: Context): MemCheck {
+        val avail = availableMemoryMB()
+        val total = runCatching {
+            val mi = android.app.ActivityManager.MemoryInfo()
+            (context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager).getMemoryInfo(mi)
+            (mi.totalMem / (1024L * 1024L)).toInt()
+        }.getOrDefault(0)
+        return MemCheck(
+            availableMB = avail,
+            totalMB = total,
+            passesHardGate = avail >= MIN_TE_MEM_MB,
+            comfortable = avail >= RECOMMENDED_MEM_MB,
+        )
+    }
 
     fun freeStorageBytes(context: Context): Long =
         modelDir(context).parentFile?.usableSpace

@@ -304,8 +304,8 @@ footer .wrap{display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;
     </div>
     <div class="req">
       <div class="req-card reveal"><div class="v">arm64 · Android 8.0+</div><div class="n">API 26+，带 OpenCL 的 GPU（首次启动有 RAM/存储门槛检测卡）</div></div>
-      <div class="req-card reveal"><div class="v">12 GB+ RAM</div><div class="n">7B 模型端侧推理的建议配置</div></div>
-      <div class="req-card reveal"><div class="v">~11 GB 存储</div><div class="n">一次性模型下载 10.3GB：断点续传 + 校验和验证</div></div>
+      <div class="req-card reveal"><div class="v">12 GB+ RAM 建议 · 6 GB 硬线</div><div class="n">运行时要求"当前可用内存 ≥ 6 GB"（与画质/步数无关，16 GB 机型后台吃紧也可能不够）——设置页顶部有内存检测卡，<b>下载 10 GB 模型前先测</b></div></div>
+      <div class="req-card reveal"><div class="v">~11 GB 存储</div><div class="n">一次性模型下载 10.3GB：断点续传 + 校验和验证，支持 huggingface / 国内镜像双下载源</div></div>
     </div>
     <div class="sign reveal" style="margin-top:22px">
       <b style="color:var(--ink)">签名证书（注册需验签的 API 服务时绑定）</b>

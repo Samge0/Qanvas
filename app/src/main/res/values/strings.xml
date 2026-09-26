@@ -83,6 +83,17 @@
     <string name="set_dl_source">Download source</string>
     <string name="set_dl_src_mirror_hint">CN mirror · fast in mainland China</string>
     <string name="set_dl_src_hf_hint">Official host · reachable via proxy</string>
+    <string name="memchk_title">Device memory check</string>
+    <string name="memchk_running">Checking memory…</string>
+    <string name="memchk_verdict_ok">Compatible — all tiers run well</string>
+    <string name="memchk_verdict_min">Minimal — Tiny/Fast tiers only</string>
+    <string name="memchk_verdict_fail">Not enough free memory</string>
+    <string name="memchk_nums_fmt">Available now: %1$d MB of %2$d MB RAM</string>
+    <string name="memchk_need_fmt">Hard requirement: %1$d MB (model load %2$d + headroom %3$d)</string>
+    <string name="memchk_explain_ok">Generation needs at least %1$d MB free at the moment it starts. You have plenty of headroom — run this check again with many apps open if you want the worst case.</string>
+    <string name="memchk_explain_min">Generation needs at least %1$d MB free at start. You clear it now with only %2$d MB to spare — close background apps before generating, and prefer Tiny/Fast tiers.</string>
+    <string name="memchk_explain_fail">Generation needs at least %1$d MB free at start and currently falls short by about %2$d MB. Close background apps and re-check — this limit applies to every size/step setting, so if it still fails, the device cannot run the model. Check this BEFORE downloading the 10 GB model.</string>
+    <string name="memchk_recheck">Re-check</string>
     <string name="set_download_title">Model download</string>
     <string name="set_download_desc">Qwen-Image-2.1 MNN · int4 · ~10.6 GB download, ~11 GB installed. Includes text-to-image, photo-editing and RGBA-sticker components.\n\nThis is currently the smallest official variant — the 7B DiT int4 (4.3 GB) and the Qwen3-VL-8B text encoder int4 (4.9 GB) dominate the size, and no lighter quantization exists. A text-to-image-only bundle would save only ~0.5 GB.</string>
     <string name="set_download_btn">Download model · 10.6 GB</string>

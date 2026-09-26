@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -50,6 +51,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -160,6 +162,75 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Spacer(Modifier.height(8.dp))
+
+        // ---------------- device memory check (top of settings) ----------------
+        var memChk by remember { mutableStateOf<GenEngine.MemCheck?>(null) }
+        LaunchedEffect(Unit) { memChk = GenEngine.memCheck(ctx) }
+        SettingsCard(title = stringResource(R.string.memchk_title)) {
+            val mc = memChk
+            if (mc == null) {
+                Text(stringResource(R.string.memchk_running), style = MaterialTheme.typography.bodySmall)
+            } else {
+                // verdict row
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Filled.CheckCircle, null, Modifier.size(18.dp),
+                        tint = when {
+                            mc.comfortable -> AppleTokens.Green
+                            mc.passesHardGate -> AppleTokens.Orange
+                            else -> AppleTokens.Red
+                        },
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        stringResource(
+                            when {
+                                mc.comfortable -> R.string.memchk_verdict_ok
+                                mc.passesHardGate -> R.string.memchk_verdict_min
+                                else -> R.string.memchk_verdict_fail
+                            }
+                        ),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                // numbers
+                Text(
+                    stringResource(R.string.memchk_nums_fmt, mc.availableMB, mc.totalMB),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    stringResource(R.string.memchk_need_fmt, GenEngine.MIN_TE_MEM_MB, mc.teNeedMB, mc.headroomMB),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(6.dp))
+                // explanation
+                Text(
+                    stringResource(
+                        when {
+                            mc.comfortable -> R.string.memchk_explain_ok
+                            mc.passesHardGate -> R.string.memchk_explain_min
+                            else -> R.string.memchk_explain_fail
+                        },
+                        GenEngine.MIN_TE_MEM_MB, mc.headroomLeftMB.coerceAtLeast(0),
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(4.dp))
+                OutlinedButton(
+                    onClick = { memChk = GenEngine.memCheck(ctx) },
+                    shape = RoundedCornerShape(999.dp),
+                    modifier = Modifier.height(36.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 4.dp),
+                ) {
+                    Icon(Icons.Filled.Memory, null, Modifier.size(14.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.memchk_recheck), fontSize = 13.sp)
+                }
+            }
+        }
 
         // ---------------- download ----------------
         SettingsCard(title = stringResource(R.string.set_download_title)) {

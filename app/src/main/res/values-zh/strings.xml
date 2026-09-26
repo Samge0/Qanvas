@@ -83,6 +83,17 @@
     <string name="set_dl_source">下载源</string>
     <string name="set_dl_src_mirror_hint">国内镜像 · 大陆直连快</string>
     <string name="set_dl_src_hf_hint">官方源 · 需代理可达</string>
+    <string name="memchk_title">设备内存检测</string>
+    <string name="memchk_running">正在检测内存…</string>
+    <string name="memchk_verdict_ok">兼容 — 全部画质档位可流畅运行</string>
+    <string name="memchk_verdict_min">勉强达标 — 仅建议 迷你/快速 档</string>
+    <string name="memchk_verdict_fail">可用内存不足</string>
+    <string name="memchk_nums_fmt">当前可用：%1$d MB / 总内存 %2$d MB</string>
+    <string name="memchk_need_fmt">硬性要求:%1$d MB(模型加载 %2$d + 预留 %3$d)</string>
+    <string name="memchk_explain_ok">生成启动瞬间至少需要 %1$d MB 可用内存。你的余量充足——想看最坏情况可多开应用后再测一次。</string>
+    <string name="memchk_explain_min">生成启动瞬间至少需要 %1$d MB 可用内存。当前仅剩 %2$d MB 余量——生成前请先清理后台,并优先使用 迷你/快速 档。</string>
+    <string name="memchk_explain_fail">生成启动瞬间至少需要 %1$d MB 可用内存,当前缺口约 %2$d MB。请清理后台后重新检测——该门槛与尺寸/步数设置无关,若仍不达标则本机无法运行该模型。请在下载 10 GB 模型前先做此检测。</string>
+    <string name="memchk_recheck">重新检测</string>
     <string name="set_download_title">模型下载</string>
     <string name="set_download_desc">Qwen-Image-2.1 MNN · int4 · 下载约 10.6 GB，安装约 11 GB。包含文生图、照片编辑与透明贴纸全部组件。\n\n这是目前最小的官方变体——体积大头是 7B DiT int4（4.3 GB）和 Qwen3-VL-8B 文本编码器 int4（4.9 GB），尚无更轻的量化版本；仅保留文生图的组合也只能省约 0.5 GB。</string>
     <string name="set_download_btn">下载模型 · 10.6 GB</string>
