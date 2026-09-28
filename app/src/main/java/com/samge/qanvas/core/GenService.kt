@@ -494,13 +494,18 @@ class GenService : Service() {
                     } catch (_: Exception) {
                     }
                 }
-                running = false
-                if (activeGen == myGen) currentTab = -1
-                BgKeepAlive.stopSilent()
-                BgKeepAlive.removeOverlay(this@GenService)
-                runCatching { if (wl.isHeld) wl.release() }
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
+                // Cleanup is generation-guarded: a zombie job must not tear down
+                // the service state a newer job (B) is actively using — clearing
+                // `running` under it would let a third job start concurrently.
+                if (activeGen == myGen) {
+                    running = false
+                    currentTab = -1
+                    BgKeepAlive.stopSilent()
+                    BgKeepAlive.removeOverlay(this@GenService)
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                }
+                runCatching { if (wl.isHeld) wl.release() } // always ours
             }
         }
     }

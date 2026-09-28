@@ -193,7 +193,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
+    private var collecting = false
+
     fun collectResult() {
+        if (collecting) return // activity recreation must not spawn a second collector
+        collecting = true
         viewModelScope.launch {
             gen.collect { st ->
                 val tab = if (st.originTab in 0..2) st.originTab else 0

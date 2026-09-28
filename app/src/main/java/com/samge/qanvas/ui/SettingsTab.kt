@@ -119,10 +119,18 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
                 Row {
                     TextButton(onClick = {
                         migrateChoice = null
+                        if (GenService.running || gen.kind == GenBus.Kind.DOWNLOADING) {
+                            vm.toast("__busy__")
+                            return@TextButton
+                        }
                         startMigrate(vm, scope, ctx, newDir, copyThenClean = false) { migrating = it }
                     }) { Text(stringResource(R.string.migrate_move)) }
                     TextButton(onClick = {
                         migrateChoice = null
+                        if (GenService.running || gen.kind == GenBus.Kind.DOWNLOADING) {
+                            vm.toast("__busy__")
+                            return@TextButton
+                        }
                         startMigrate(vm, scope, ctx, newDir, copyThenClean = true) { migrating = it }
                     }) { Text(stringResource(R.string.migrate_copy)) }
                 }
@@ -140,7 +148,10 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
             onDismiss = { dirPicker = false },
             onPicked = { picked ->
                 dirPicker = false
-                if (picked.isDirectory && picked.canWrite()) {
+                // never swap the model directory while a job is loading from it
+                if (GenService.running || gen.kind == GenBus.Kind.DOWNLOADING) {
+                    vm.toast("__busy__")
+                } else if (picked.isDirectory && picked.canWrite()) {
                     // switch immediately, then offer migration of existing files
                     prefs.edit().putString(GenEngine.KEY_MODEL_DIR, picked.absolutePath).apply()
                     vm.refreshGate()
@@ -608,6 +619,10 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
+                    if (GenService.running || gen.kind == GenBus.Kind.DOWNLOADING) {
+                        vm.toast("__busy__")
+                        return@TextButton
+                    }
                     scope.launch(Dispatchers.IO) {
                         GenEngine.deleteModels(ctx)
                         kotlinx.coroutines.withContext(Dispatchers.Main) {
