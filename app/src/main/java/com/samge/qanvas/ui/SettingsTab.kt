@@ -211,6 +211,7 @@ fun SettingsTab(vm: MainViewModel, gen: GenBus.State) {
                         when {
                             mc.comfortable -> R.string.memchk_explain_ok
                             mc.passesHardGate -> R.string.memchk_explain_min
+                            mc.busyNow -> R.string.memchk_explain_busy
                             else -> R.string.memchk_explain_fail
                         },
                         GenEngine.MIN_TE_MEM_MB, mc.headroomLeftMB.coerceAtLeast(0),

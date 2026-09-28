@@ -647,7 +647,7 @@ fun CreateTab(vm: MainViewModel) {
                 })
             }
         }
-        if (gen.kind == GenBus.Kind.OOM) item { OomCard() }
+        if (gen.kind == GenBus.Kind.OOM) item { OomCard(gen.error) }
         if (gen.kind == GenBus.Kind.ERROR && gen.error != "__cancelled__") item { ErrorCard(gen.error ?: "unknown") }
         item { ResultCard(result, resultPath) }
         item { Spacer(Modifier.height(30.dp)) }
@@ -724,7 +724,7 @@ fun StickerTab(vm: MainViewModel) {
                 })
             }
         }
-        if (gen.kind == GenBus.Kind.OOM) item { OomCard() }
+        if (gen.kind == GenBus.Kind.OOM) item { OomCard(gen.error) }
         if (gen.kind == GenBus.Kind.ERROR && gen.error != "__cancelled__") item { ErrorCard(gen.error ?: "unknown") }
         item { ResultCard(result, resultPath, checker = true) }
         item { Spacer(Modifier.height(30.dp)) }
@@ -848,7 +848,7 @@ fun EditTab(vm: MainViewModel) {
                 })
             }
         }
-        if (gen.kind == GenBus.Kind.OOM) item { OomCard() }
+        if (gen.kind == GenBus.Kind.OOM) item { OomCard(gen.error) }
         if (gen.kind == GenBus.Kind.ERROR && gen.error != "__cancelled__") item { ErrorCard(gen.error ?: "unknown") }
         item { ResultCard(result, resultPath) }
         item { Spacer(Modifier.height(30.dp)) }
@@ -1448,7 +1448,7 @@ fun GenerateButton(
 }
 
 @Composable
-fun OomCard() {
+fun OomCard(rawMsg: String?) {
     Card(colors = CardDefaults.cardColors(containerColor = Color(0x14FF9500)), shape = RoundedCornerShape(18.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1458,6 +1458,12 @@ fun OomCard() {
             }
             Spacer(Modifier.height(6.dp))
             Text(stringResource(R.string.oom_body), style = MaterialTheme.typography.bodySmall)
+            // surface the runtime's own numbers (e.g. "needs about 5600 MB, only 5320 MB available")
+            if (!rawMsg.isNullOrBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text(rawMsg, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }

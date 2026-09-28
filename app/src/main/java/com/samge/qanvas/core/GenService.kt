@@ -421,6 +421,7 @@ class GenService : Service() {
                                 GenBus.Kind.GENERATING, p,
                                 stageKey = GenEngine.stageKind(p),
                                 stageStep = ((p - 10).coerceAtLeast(0) / 75.0 * steps).toInt().coerceAtMost(steps),
+                                originTab = tab,
                             )
                         )
                     }

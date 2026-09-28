@@ -71,6 +71,10 @@ object GenEngine {
         val headroomMB: Int = 400,
     ) {
         val headroomLeftMB: Int get() = availableMB - (teNeedMB + headroomMB)
+        /** Total RAM physically below the gate even on a fresh boot. */
+        val physicallyShort: Boolean get() = totalMB in 1 until MIN_TE_MEM_MB
+        /** Has the raw RAM, but background apps eat the headroom right now. */
+        val busyNow: Boolean get() = !passesHardGate && totalMB >= MIN_TE_MEM_MB
     }
 
     fun memCheck(context: Context): MemCheck {

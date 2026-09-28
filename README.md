@@ -69,8 +69,9 @@ If progress still stalls on your ROM (you'll see the completion toast report
 - **6 GB free memory is a hard floor, 12 GB+ RAM recommended.** The runtime
   requires ≥ 6 GB *available* memory (MemAvailable) at generation start —
   regardless of size/steps settings, so a 16 GB phone with a busy background
-  can still fail. **Settings shows a memory-check card at the top — run it
-  BEFORE downloading the 10 GB model.**
+  can still fail. Note: system "memory extension" (swap on storage) does NOT
+  count — the model needs real RAM. **Settings shows a memory-check card at
+  the top — run it BEFORE downloading the 10 GB model.**
 - ~11 GB free storage for the one-time model download (~10.3 GB, resumable,
   checksum-verified; huggingface.co or the CN-friendly hf-mirror.com source)
 
