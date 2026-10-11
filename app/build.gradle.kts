@@ -8,12 +8,24 @@ plugins {
 }
 
 // CI signing: secrets provide the keystore (base64) + passwords.
-// Local builds fall back to the debug key automatically.
+// Local builds fall back to the same release key via .secrets/ (gitignored),
+// so a locally built APK installs as an in-place update of the GitHub release.
 val ciKeystoreB64 = System.getenv("KEYSTORE_BASE64")
 val ciStorePass = System.getenv("KEYSTORE_PASSWORD")
 val ciKeyAlias = System.getenv("KEY_ALIAS")
 val ciKeyPass = System.getenv("KEY_PASSWORD")
 val hasCiSigning = !ciKeystoreB64.isNullOrBlank() && !ciStorePass.isNullOrBlank()
+
+// local fallback: the SAME keystore CI uses, checked in as .secrets/ (gitignored)
+val localKs = rootProject.file(".secrets/qanvas-release.jks")
+val localSecrets = rootProject.file(".secrets")
+fun secret(name: String): String? =
+    runCatching {
+        val f = localSecrets.resolve("$name.txt")
+        if (f.exists()) f.readText().trim().ifBlank { null } else null
+    }.getOrNull()
+val hasLocalSigning = !hasCiSigning && localKs.exists() && secret("KEYSTORE_PASSWORD") != null
+val useLocalSigning = hasLocalSigning
 
 android {
     namespace = "com.samge.qanvas"
@@ -41,16 +53,32 @@ android {
                 keyAlias = ciKeyAlias
                 keyPassword = ciKeyPass
             }
+        } else if (useLocalSigning) {
+            create("localRelease") {
+                storeFile = localKs
+                storePassword = secret("KEYSTORE_PASSWORD")
+                keyAlias = secret("KEY_ALIAS") ?: "qanvas"
+                keyPassword = secret("KEY_PASSWORD") ?: secret("KEYSTORE_PASSWORD")
+            }
         }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            if (hasCiSigning) {
-                signingConfig = signingConfigs.getByName("ci")
+            signingConfig = when {
+                hasCiSigning -> signingConfigs.getByName("ci")
+                useLocalSigning -> signingConfigs.getByName("localRelease")
+                else -> null
             }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+        debug {
+            // local test builds also use the release key when present — same
+            // signature as GitHub releases, so they install as updates
+            if (useLocalSigning) {
+                signingConfig = signingConfigs.getByName("localRelease")
+            }
         }
     }
 
